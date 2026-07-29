@@ -17,6 +17,8 @@ type Candidate struct {
 	EventID            string
 	ValuationVersion   string
 	ChainID            uint64
+	WalletAddress      string
+	AttributionMethod  string
 	BlockNumber        uint64
 	BlockTime          time.Time
 	TransactionHash    string
@@ -29,6 +31,14 @@ type Candidate struct {
 	SoldTokenSymbol    string
 	TradeValueUSDRaw   string
 	ValuedAt           time.Time
+	ObservedAt         time.Time
+	IsLargeTrade       bool
+	SmartScoreVersion  string
+	SmartScoreRaw      string
+	SmartScoreGrade    string
+	SmartConfidenceRaw string
+	SmartScoreSourceAt time.Time
+	SmartScoreAt       time.Time
 	BoughtRisk         RiskFlags
 	SoldRisk           RiskFlags
 }
@@ -73,15 +83,16 @@ type Sender interface {
 }
 
 type Cursor struct {
-	ValuedAt time.Time
-	EventID  string
+	ObservedAt time.Time
+	EventID    string
 }
 
 type CandidateStore interface {
-	LargeTradeCandidates(
+	RealtimeAlertCandidates(
 		ctx context.Context,
 		lookback time.Duration,
 		after Cursor,
+		scoreVersion string,
 		limit int,
 	) ([]Candidate, error)
 }

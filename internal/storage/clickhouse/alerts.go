@@ -8,43 +8,87 @@ import (
 	"github.com/basewatch/base-analytics/internal/alerting"
 )
 
-func (s *EventStore) LargeTradeCandidates(
+func (s *EventStore) RealtimeAlertCandidates(
 	ctx context.Context,
 	lookback time.Duration,
 	after alerting.Cursor,
+	scoreVersion string,
 	limit int,
 ) ([]alerting.Candidate, error) {
-	if after.ValuedAt.IsZero() {
-		after.ValuedAt = time.Unix(0, 0).UTC()
+	if after.ObservedAt.IsZero() {
+		after.ObservedAt = time.Unix(0, 0).UTC()
 	}
 	rows, err := s.conn.Query(ctx, `
-		WITH latest_risk AS (
-			SELECT
-				chain_id,
-				token_address,
-				argMax(ifNull(is_honeypot, 0), fetched_at) AS latest_is_honeypot,
-				argMax(ifNull(has_mint_method, 0), fetched_at) AS latest_has_mint_method,
-				argMax(ifNull(has_black_method, 0), fetched_at) AS latest_has_black_method,
-				argMax(ifNull(is_proxy, 0), fetched_at) AS latest_is_proxy
-			FROM token_risk_snapshots
-			GROUP BY chain_id, token_address
-		)
+		WITH
+			candidate_activities AS (
+				SELECT *
+				FROM wallet_swap_activities FINAL
+				WHERE generated_at >= now() - toIntervalSecond(?)
+				  AND (generated_at, event_id) > (?, ?)
+				ORDER BY generated_at, event_id
+				LIMIT ?
+			),
+			latest_risk AS (
+				SELECT
+					chain_id,
+					token_address,
+					argMax(ifNull(is_honeypot, 0), fetched_at) AS latest_is_honeypot,
+					argMax(ifNull(has_mint_method, 0), fetched_at) AS latest_has_mint_method,
+					argMax(ifNull(has_black_method, 0), fetched_at) AS latest_has_black_method,
+					argMax(ifNull(is_proxy, 0), fetched_at) AS latest_is_proxy
+				FROM token_risk_snapshots
+				WHERE (chain_id, token_address) IN (
+					SELECT
+						chain_id,
+						arrayJoin([bought_token_address, sold_token_address]) AS token_address
+					FROM candidate_activities
+				)
+				GROUP BY chain_id, token_address
+			),
+			latest_scores AS (
+				SELECT
+					chain_id,
+					wallet_address,
+					argMax(analytics_version, calculated_at) AS score_version,
+					argMax(smart_score_raw, calculated_at) AS score_raw,
+					argMax(smart_score_grade, calculated_at) AS score_grade,
+					argMax(confidence_raw, calculated_at) AS confidence_raw,
+					argMax(source_updated_at, calculated_at) AS score_source_updated_at,
+					max(calculated_at) AS score_calculated_at
+				FROM wallet_smart_score_snapshots
+				WHERE analytics_version = ?
+				  AND (chain_id, wallet_address) IN (
+					SELECT chain_id, wallet_address
+					FROM candidate_activities
+				  )
+				GROUP BY chain_id, wallet_address
+			)
 		SELECT
-			v.event_id,
-			v.valuation_version,
-			v.chain_id,
-			v.block_number,
-			v.block_time,
-			v.transaction_hash,
-			v.pool_address,
-			v.protocol,
-			v.protocol_version,
-			v.bought_token_address,
-			v.bought_token_symbol,
-			v.sold_token_address,
-			v.sold_token_symbol,
-			v.trade_value_usd_raw,
-			v.valued_at,
+			w.event_id,
+			w.valuation_version,
+			w.chain_id,
+			w.wallet_address,
+			w.attribution_method,
+			w.block_number,
+			w.block_time,
+			w.transaction_hash,
+			w.pool_address,
+			w.protocol,
+			w.protocol_version,
+			w.bought_token_address,
+			w.bought_token_symbol,
+			w.sold_token_address,
+			w.sold_token_symbol,
+			w.trade_value_usd_raw,
+			w.source_valued_at,
+			w.generated_at,
+			v.is_large_trade,
+			ifNull(sc.score_version, ''),
+			ifNull(sc.score_raw, ''),
+			ifNull(sc.score_grade, ''),
+			ifNull(sc.confidence_raw, ''),
+			ifNull(sc.score_source_updated_at, toDateTime64(0, 3, 'UTC')),
+			ifNull(sc.score_calculated_at, toDateTime64(0, 3, 'UTC')),
 			b.latest_is_honeypot,
 			b.latest_has_mint_method,
 			b.latest_has_black_method,
@@ -53,35 +97,40 @@ func (s *EventStore) LargeTradeCandidates(
 			s.latest_has_mint_method,
 			s.latest_has_black_method,
 			s.latest_is_proxy
-		FROM dex_swap_valuations_current AS v
+		FROM candidate_activities AS w
+		INNER JOIN dex_swap_valuations_current AS v
+			ON v.chain_id = w.chain_id AND v.event_id = w.event_id
+		LEFT JOIN latest_scores AS sc
+			ON sc.chain_id = w.chain_id AND sc.wallet_address = w.wallet_address
 		LEFT JOIN latest_risk AS b
-			ON b.chain_id = v.chain_id AND b.token_address = v.bought_token_address
+			ON b.chain_id = w.chain_id AND b.token_address = w.bought_token_address
 		LEFT JOIN latest_risk AS s
-			ON s.chain_id = v.chain_id AND s.token_address = v.sold_token_address
-		WHERE v.is_large_trade = 1
-		  AND v.valued_at >= now() - toIntervalSecond(?)
-		  AND (v.valued_at, v.event_id) > (?, ?)
-		ORDER BY v.valued_at, v.event_id
-		LIMIT ?`,
+			ON s.chain_id = w.chain_id AND s.token_address = w.sold_token_address
+		ORDER BY w.generated_at, w.event_id
+		`,
 		int64(lookback/time.Second),
-		after.ValuedAt,
+		after.ObservedAt,
 		after.EventID,
 		limit,
+		scoreVersion,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query large trade alert candidates: %w", err)
+		return nil, fmt.Errorf("query realtime alert candidates: %w", err)
 	}
 	defer rows.Close()
 
 	candidates := make([]alerting.Candidate, 0, limit)
 	for rows.Next() {
 		var candidate alerting.Candidate
+		var isLargeTrade uint8
 		var boughtHoneypot, boughtMint, boughtBlack, boughtProxy uint8
 		var soldHoneypot, soldMint, soldBlack, soldProxy uint8
 		if err := rows.Scan(
 			&candidate.EventID,
 			&candidate.ValuationVersion,
 			&candidate.ChainID,
+			&candidate.WalletAddress,
+			&candidate.AttributionMethod,
 			&candidate.BlockNumber,
 			&candidate.BlockTime,
 			&candidate.TransactionHash,
@@ -94,6 +143,14 @@ func (s *EventStore) LargeTradeCandidates(
 			&candidate.SoldTokenSymbol,
 			&candidate.TradeValueUSDRaw,
 			&candidate.ValuedAt,
+			&candidate.ObservedAt,
+			&isLargeTrade,
+			&candidate.SmartScoreVersion,
+			&candidate.SmartScoreRaw,
+			&candidate.SmartScoreGrade,
+			&candidate.SmartConfidenceRaw,
+			&candidate.SmartScoreSourceAt,
+			&candidate.SmartScoreAt,
 			&boughtHoneypot,
 			&boughtMint,
 			&boughtBlack,
@@ -103,8 +160,9 @@ func (s *EventStore) LargeTradeCandidates(
 			&soldBlack,
 			&soldProxy,
 		); err != nil {
-			return nil, fmt.Errorf("scan large trade alert candidate: %w", err)
+			return nil, fmt.Errorf("scan realtime alert candidate: %w", err)
 		}
+		candidate.IsLargeTrade = isLargeTrade == 1
 		candidate.BoughtRisk = alerting.RiskFlags{
 			IsHoneypot:     boughtHoneypot == 1,
 			HasMintMethod:  boughtMint == 1,
@@ -120,7 +178,7 @@ func (s *EventStore) LargeTradeCandidates(
 		candidates = append(candidates, candidate)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate large trade alert candidates: %w", err)
+		return nil, fmt.Errorf("iterate realtime alert candidates: %w", err)
 	}
 	return candidates, nil
 }

@@ -36,6 +36,10 @@ type Config struct {
 	AlertPollInterval            time.Duration
 	AlertCriticalUSD             string
 	AlertQuoteSymbols            string
+	AlertSmartScoreVersion       string
+	AlertSmartScoreMin           string
+	AlertSmartConfidenceMin      string
+	AlertSmartTradeMinUSD        string
 	AlertWebhookURL              string
 	AlertWebhookSecret           string
 	AlertDeliveryBatchSize       uint64
@@ -184,6 +188,10 @@ func Load() (Config, error) {
 		"ALERT_QUOTE_SYMBOLS",
 		"WETH,USDC,USDBC,USDT,DAI,EURC,CBBTC",
 	)
+	cfg.AlertSmartScoreVersion = env("ALERT_SMART_SCORE_VERSION", "smart-v1")
+	cfg.AlertSmartScoreMin = env("ALERT_SMART_SCORE_MIN", "65")
+	cfg.AlertSmartConfidenceMin = env("ALERT_SMART_CONFIDENCE_MIN", "0.6")
+	cfg.AlertSmartTradeMinUSD = env("ALERT_SMART_TRADE_MIN_USD", "1000")
 	cfg.AlertWebhookURL = strings.TrimSpace(os.Getenv("ALERT_WEBHOOK_URL"))
 	cfg.AlertWebhookSecret = os.Getenv("ALERT_WEBHOOK_SECRET")
 	cfg.AlertDeliveryBatchSize, err = uintEnv("ALERT_DELIVERY_BATCH_SIZE", 20)

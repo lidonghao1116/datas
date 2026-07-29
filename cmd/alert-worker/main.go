@@ -49,11 +49,17 @@ func main() {
 		source,
 		outbox,
 		logger,
-		alerting.SortedQuoteSymbols(cfg.AlertQuoteSymbols),
-		cfg.AlertCriticalUSD,
-		cfg.AlertLookback,
-		int(cfg.AlertBatchSize),
-		cfg.AlertPollInterval,
+		alerting.EngineConfig{
+			QuoteSymbols:       alerting.SortedQuoteSymbols(cfg.AlertQuoteSymbols),
+			CriticalUSD:        cfg.AlertCriticalUSD,
+			SmartScoreVersion:  cfg.AlertSmartScoreVersion,
+			SmartScoreMin:      cfg.AlertSmartScoreMin,
+			SmartConfidenceMin: cfg.AlertSmartConfidenceMin,
+			SmartTradeMinUSD:   cfg.AlertSmartTradeMinUSD,
+			Lookback:           cfg.AlertLookback,
+			BatchSize:          int(cfg.AlertBatchSize),
+			PollInterval:       cfg.AlertPollInterval,
+		},
 	)
 	if err != nil {
 		logger.Error("create alert engine", "error", err)
