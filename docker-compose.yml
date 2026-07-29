@@ -321,6 +321,31 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  gmgn-wallet-sync:
+    build:
+      context: .
+      target: gmgn-wallet-sync
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      GMGN_BASE_URL: ${GMGN_BASE_URL:-https://openapi.gmgn.ai}
+      GMGN_REQUEST_TIMEOUT: ${GMGN_REQUEST_TIMEOUT:-15s}
+      GMGN_MIN_REQUEST_INTERVAL: ${GMGN_MIN_REQUEST_INTERVAL:-5s}
+      GMGN_WALLET_PERIODS: ${GMGN_WALLET_PERIODS:-7d,30d}
+      GMGN_WALLET_SYNC_BATCH_SIZE: ${GMGN_WALLET_SYNC_BATCH_SIZE:-5}
+      GMGN_WALLET_FRESHNESS: ${GMGN_WALLET_FRESHNESS:-1h}
+      GMGN_WALLET_ACTIVE_LOOKBACK: ${GMGN_WALLET_ACTIVE_LOOKBACK:-24h}
+      GMGN_WALLET_SYNC_INTERVAL: ${GMGN_WALLET_SYNC_INTERVAL:-5s}
+      GMGN_WALLET_RETRY_BASE: ${GMGN_WALLET_RETRY_BASE:-5m}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      wallet-profile-worker:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:

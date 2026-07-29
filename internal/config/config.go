@@ -50,6 +50,16 @@ type Config struct {
 	APIAllowedOrigins            []string
 	WalletProfileBatchSize       uint64
 	WalletProfilePollInterval    time.Duration
+	GMGNBaseURL                  string
+	GMGNAPIKey                   string
+	GMGNRequestTimeout           time.Duration
+	GMGNMinRequestInterval       time.Duration
+	GMGNWalletPeriods            []string
+	GMGNWalletSyncBatchSize      uint64
+	GMGNWalletFreshness          time.Duration
+	GMGNWalletActiveLookback     time.Duration
+	GMGNWalletSyncInterval       time.Duration
+	GMGNWalletRetryBase          time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -238,6 +248,57 @@ func Load() (Config, error) {
 	}
 	if cfg.WalletProfilePollInterval <= 0 {
 		return Config{}, fmt.Errorf("WALLET_PROFILE_POLL_INTERVAL must be positive")
+	}
+	cfg.GMGNBaseURL = env("GMGN_BASE_URL", "https://openapi.gmgn.ai")
+	cfg.GMGNAPIKey = strings.TrimSpace(os.Getenv("GMGN_API_KEY"))
+	cfg.GMGNRequestTimeout, err = durationEnv("GMGN_REQUEST_TIMEOUT", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.GMGNMinRequestInterval, err = durationEnv(
+		"GMGN_MIN_REQUEST_INTERVAL",
+		5*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.GMGNWalletPeriods = splitEnv("GMGN_WALLET_PERIODS", "7d,30d")
+	cfg.GMGNWalletSyncBatchSize, err = uintEnv("GMGN_WALLET_SYNC_BATCH_SIZE", 5)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.GMGNWalletSyncBatchSize == 0 {
+		return Config{}, fmt.Errorf("GMGN_WALLET_SYNC_BATCH_SIZE must be positive")
+	}
+	cfg.GMGNWalletFreshness, err = durationEnv("GMGN_WALLET_FRESHNESS", time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.GMGNWalletActiveLookback, err = durationEnv(
+		"GMGN_WALLET_ACTIVE_LOOKBACK",
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.GMGNWalletSyncInterval, err = durationEnv(
+		"GMGN_WALLET_SYNC_INTERVAL",
+		5*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.GMGNWalletRetryBase, err = durationEnv("GMGN_WALLET_RETRY_BASE", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.GMGNRequestTimeout <= 0 ||
+		cfg.GMGNMinRequestInterval < 0 ||
+		cfg.GMGNWalletFreshness <= 0 ||
+		cfg.GMGNWalletActiveLookback <= 0 ||
+		cfg.GMGNWalletSyncInterval <= 0 ||
+		cfg.GMGNWalletRetryBase <= 0 {
+		return Config{}, fmt.Errorf("GMGN durations must be positive")
 	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
