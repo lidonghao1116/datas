@@ -26,6 +26,11 @@ type Config struct {
 	MarketSyncBatchSize          uint64
 	MarketRiskBatchSize          uint64
 	MarketSyncInterval           time.Duration
+	ValuationBatchSize           uint64
+	ValuationLookback            time.Duration
+	ValuationMaxPriceAge         time.Duration
+	ValuationPollInterval        time.Duration
+	LargeTradeUSD                string
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -113,6 +118,23 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	cfg.ValuationBatchSize, err = uintEnv("VALUATION_BATCH_SIZE", 500)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.ValuationLookback, err = durationEnv("VALUATION_LOOKBACK", time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.ValuationMaxPriceAge, err = durationEnv("VALUATION_MAX_PRICE_AGE", 10*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.ValuationPollInterval, err = durationEnv("VALUATION_POLL_INTERVAL", 2*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.LargeTradeUSD = env("LARGE_TRADE_USD", "10000")
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
 	cfg.ConsumerGroup = env("REDPANDA_CONSUMER_GROUP", "base-clickhouse-writer-v1")

@@ -221,6 +221,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  valuation-worker:
+    build:
+      context: .
+      target: valuation-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      VALUATION_BATCH_SIZE: ${VALUATION_BATCH_SIZE:-500}
+      VALUATION_LOOKBACK: ${VALUATION_LOOKBACK:-1h}
+      VALUATION_MAX_PRICE_AGE: ${VALUATION_MAX_PRICE_AGE:-10m}
+      VALUATION_POLL_INTERVAL: ${VALUATION_POLL_INTERVAL:-2s}
+      LARGE_TRADE_USD: ${LARGE_TRADE_USD:-10000}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:
