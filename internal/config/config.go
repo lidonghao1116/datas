@@ -19,6 +19,13 @@ type Config struct {
 	RegistryBackfillBatchSize    uint64
 	RegistryBackfillBatchTimeout time.Duration
 	RegistryBackfillScanInterval time.Duration
+	AVEBaseURL                   string
+	AVEAPIKey                    string
+	AVERequestTimeout            time.Duration
+	AVEMinRequestInterval        time.Duration
+	MarketSyncBatchSize          uint64
+	MarketRiskBatchSize          uint64
+	MarketSyncInterval           time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -78,6 +85,31 @@ func Load() (Config, error) {
 		"REGISTRY_BACKFILL_SCAN_INTERVAL",
 		30*time.Second,
 	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AVEBaseURL = env("AVE_BASE_URL", "https://prod.ave-api.com")
+	cfg.AVEAPIKey = strings.TrimSpace(os.Getenv("AVE_API_KEY"))
+	cfg.AVERequestTimeout, err = durationEnv("AVE_REQUEST_TIMEOUT", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AVEMinRequestInterval, err = durationEnv(
+		"AVE_MIN_REQUEST_INTERVAL",
+		250*time.Millisecond,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MarketSyncBatchSize, err = uintEnv("MARKET_SYNC_BATCH_SIZE", 200)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MarketRiskBatchSize, err = uintEnv("MARKET_RISK_BATCH_SIZE", 10)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MarketSyncInterval, err = durationEnv("MARKET_SYNC_INTERVAL", 5*time.Minute)
 	if err != nil {
 		return Config{}, err
 	}

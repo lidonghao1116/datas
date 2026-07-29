@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/basewatch/base-analytics/internal/marketdata"
 )
 
 type Store interface {
@@ -193,6 +195,43 @@ func (s *PostgresStore) UpsertToken(ctx context.Context, token Token) error {
 		return fmt.Errorf("upsert token %s: %w", token.Address, err)
 	}
 	return nil
+}
+
+func (s *PostgresStore) ListMarketTokens(
+	ctx context.Context,
+	chainID uint64,
+	afterAddress string,
+	limit int,
+) ([]marketdata.Token, error) {
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT token_address
+		   FROM token_metadata
+		  WHERE chain_id = $1
+		    AND token_address > $2
+		  ORDER BY token_address
+		  LIMIT $3`,
+		int64(chainID),
+		afterAddress,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list market data tokens: %w", err)
+	}
+	defer rows.Close()
+
+	tokens := make([]marketdata.Token, 0, limit)
+	for rows.Next() {
+		var address string
+		if err := rows.Scan(&address); err != nil {
+			return nil, fmt.Errorf("scan market data token: %w", err)
+		}
+		tokens = append(tokens, marketdata.Token{ChainID: chainID, Address: address})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate market data tokens: %w", err)
+	}
+	return tokens, nil
 }
 
 func (s *PostgresStore) Close() {

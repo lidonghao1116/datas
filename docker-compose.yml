@@ -200,6 +200,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  market-sync:
+    build:
+      context: .
+      target: market-sync
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      AVE_BASE_URL: ${AVE_BASE_URL:-https://prod.ave-api.com}
+      MARKET_SYNC_BATCH_SIZE: ${MARKET_SYNC_BATCH_SIZE:-200}
+      MARKET_RISK_BATCH_SIZE: ${MARKET_RISK_BATCH_SIZE:-10}
+      MARKET_SYNC_INTERVAL: ${MARKET_SYNC_INTERVAL:-5m}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:
