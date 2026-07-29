@@ -14,7 +14,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldfl
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/valuation-worker ./cmd/valuation-worker && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/alert-worker ./cmd/alert-worker && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/alert-dispatcher ./cmd/alert-dispatcher && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/query-api ./cmd/query-api
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/query-api ./cmd/query-api && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/wallet-profile-worker ./cmd/wallet-profile-worker
 
 FROM gcr.io/distroless/static-debian12:nonroot AS block-ingestor
 COPY --from=builder /out/block-ingestor /block-ingestor
@@ -51,3 +52,7 @@ ENTRYPOINT ["/alert-dispatcher"]
 FROM gcr.io/distroless/static-debian12:nonroot AS query-api
 COPY --from=builder /out/query-api /query-api
 ENTRYPOINT ["/query-api"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS wallet-profile-worker
+COPY --from=builder /out/wallet-profile-worker /wallet-profile-worker
+ENTRYPOINT ["/wallet-profile-worker"]

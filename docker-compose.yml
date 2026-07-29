@@ -305,6 +305,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  wallet-profile-worker:
+    build:
+      context: .
+      target: wallet-profile-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      WALLET_PROFILE_BATCH_SIZE: ${WALLET_PROFILE_BATCH_SIZE:-1000}
+      WALLET_PROFILE_POLL_INTERVAL: ${WALLET_PROFILE_POLL_INTERVAL:-2s}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:

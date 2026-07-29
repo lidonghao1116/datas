@@ -48,12 +48,18 @@ func (s *fakeAlertStore) Ping(context.Context) error {
 }
 
 type fakeAnalyticsStore struct {
-	trades       []LargeTrade
-	market       TokenMarket
-	marketErr    error
-	tradeLimit   int
-	tokenAddress string
-	pingErr      error
+	trades        []LargeTrade
+	market        TokenMarket
+	marketErr     error
+	profile       WalletProfile
+	profileErr    error
+	walletTrades  []WalletTrade
+	positions     []WalletPosition
+	tradeLimit    int
+	walletLimit   int
+	tokenAddress  string
+	walletAddress string
+	pingErr       error
 }
 
 func (s *fakeAnalyticsStore) RecentLargeTrades(
@@ -71,6 +77,37 @@ func (s *fakeAnalyticsStore) TokenMarket(
 ) (TokenMarket, error) {
 	s.tokenAddress = address
 	return s.market, s.marketErr
+}
+
+func (s *fakeAnalyticsStore) WalletProfile(
+	_ context.Context,
+	_ uint64,
+	address string,
+) (WalletProfile, error) {
+	s.walletAddress = address
+	return s.profile, s.profileErr
+}
+
+func (s *fakeAnalyticsStore) WalletTrades(
+	_ context.Context,
+	_ uint64,
+	address string,
+	limit int,
+) ([]WalletTrade, error) {
+	s.walletAddress = address
+	s.walletLimit = limit
+	return s.walletTrades, nil
+}
+
+func (s *fakeAnalyticsStore) WalletPositions(
+	_ context.Context,
+	_ uint64,
+	address string,
+	limit int,
+) ([]WalletPosition, error) {
+	s.walletAddress = address
+	s.walletLimit = limit
+	return s.positions, nil
 }
 
 func (s *fakeAnalyticsStore) Ping(context.Context) error {
@@ -164,6 +201,49 @@ func TestTokenMarketNotFound(t *testing.T) {
 	)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestWalletProfileNormalizesAddress(t *testing.T) {
+	const wallet = "0xAbC0000000000000000000000000000000000000"
+	analytics := &fakeAnalyticsStore{
+		profile: WalletProfile{ChainID: 8453},
+	}
+	server := newTestServer(t, &fakeAlertStore{}, analytics)
+	response := httptest.NewRecorder()
+	server.Handler(context.Background()).ServeHTTP(
+		response,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/v1/wallets/"+wallet+"/profile",
+			nil,
+		),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if analytics.walletAddress != strings.ToLower(wallet) {
+		t.Fatalf("wallet address = %q", analytics.walletAddress)
+	}
+}
+
+func TestWalletTradesClampsLimit(t *testing.T) {
+	analytics := &fakeAnalyticsStore{}
+	server := newTestServer(t, &fakeAlertStore{}, analytics)
+	response := httptest.NewRecorder()
+	server.Handler(context.Background()).ServeHTTP(
+		response,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/v1/wallets/0xabc0000000000000000000000000000000000000/trades?limit=999",
+			nil,
+		),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if analytics.walletLimit != maxPageLimit {
+		t.Fatalf("wallet limit = %d", analytics.walletLimit)
 	}
 }
 

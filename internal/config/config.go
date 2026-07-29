@@ -48,6 +48,8 @@ type Config struct {
 	APIListenAddress             string
 	APIAlertPollInterval         time.Duration
 	APIAllowedOrigins            []string
+	WalletProfileBatchSize       uint64
+	WalletProfilePollInterval    time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -220,6 +222,23 @@ func Load() (Config, error) {
 		"API_ALLOWED_ORIGINS",
 		"http://localhost:3000,http://localhost:5173",
 	)
+	cfg.WalletProfileBatchSize, err = uintEnv("WALLET_PROFILE_BATCH_SIZE", 1000)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.WalletProfileBatchSize == 0 {
+		return Config{}, fmt.Errorf("WALLET_PROFILE_BATCH_SIZE must be positive")
+	}
+	cfg.WalletProfilePollInterval, err = durationEnv(
+		"WALLET_PROFILE_POLL_INTERVAL",
+		2*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.WalletProfilePollInterval <= 0 {
+		return Config{}, fmt.Errorf("WALLET_PROFILE_POLL_INTERVAL must be positive")
+	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
 	cfg.ConsumerGroup = env("REDPANDA_CONSUMER_GROUP", "base-clickhouse-writer-v1")

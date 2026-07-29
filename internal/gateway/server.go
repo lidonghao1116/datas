@@ -72,6 +72,7 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux.HandleFunc("/api/v1/alerts", s.recentAlerts)
 	mux.HandleFunc("/api/v1/trades/large", s.recentLargeTrades)
 	mux.HandleFunc("/api/v1/tokens/", s.tokenMarket)
+	mux.HandleFunc("/api/v1/wallets/", s.wallet)
 	mux.HandleFunc("/ws/alerts", s.websocketAlerts(ctx))
 	return s.cors(mux)
 }
@@ -188,6 +189,88 @@ func (s *Server) tokenMarket(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"data": market})
+}
+
+func (s *Server) wallet(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		methodNotAllowed(writer)
+		return
+	}
+	path := strings.TrimPrefix(request.URL.Path, "/api/v1/wallets/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 ||
+		!common.IsHexAddress(parts[0]) ||
+		common.HexToAddress(parts[0]) == (common.Address{}) {
+		writeError(writer, http.StatusBadRequest, "invalid wallet address or resource")
+		return
+	}
+	address := strings.ToLower(common.HexToAddress(parts[0]).Hex())
+	switch parts[1] {
+	case "profile":
+		s.walletProfile(writer, request, address)
+	case "trades":
+		s.walletTrades(writer, request, address)
+	case "positions":
+		s.walletPositions(writer, request, address)
+	default:
+		writeError(writer, http.StatusBadRequest, "invalid wallet resource")
+	}
+}
+
+func (s *Server) walletProfile(
+	writer http.ResponseWriter,
+	request *http.Request,
+	address string,
+) {
+	profile, err := s.analytics.WalletProfile(request.Context(), 8453, address)
+	if errors.Is(err, ErrNotFound) {
+		writeError(writer, http.StatusNotFound, "wallet profile not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("query wallet profile", "wallet_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"data": profile})
+}
+
+func (s *Server) walletTrades(
+	writer http.ResponseWriter,
+	request *http.Request,
+	address string,
+) {
+	limit, err := queryLimit(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	trades, err := s.analytics.WalletTrades(request.Context(), 8453, address, limit)
+	if err != nil {
+		s.logger.Error("query wallet trades", "wallet_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"data": trades})
+}
+
+func (s *Server) walletPositions(
+	writer http.ResponseWriter,
+	request *http.Request,
+	address string,
+) {
+	limit, err := queryLimit(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	positions, err := s.analytics.WalletPositions(request.Context(), 8453, address, limit)
+	if err != nil {
+		s.logger.Error("query wallet positions", "wallet_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"data": positions})
 }
 
 func (s *Server) websocketAlerts(ctx context.Context) http.HandlerFunc {
