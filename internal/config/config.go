@@ -31,6 +31,11 @@ type Config struct {
 	ValuationMaxPriceAge         time.Duration
 	ValuationPollInterval        time.Duration
 	LargeTradeUSD                string
+	AlertBatchSize               uint64
+	AlertLookback                time.Duration
+	AlertPollInterval            time.Duration
+	AlertCriticalUSD             string
+	AlertQuoteSymbols            string
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -135,6 +140,23 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.LargeTradeUSD = env("LARGE_TRADE_USD", "10000")
+	cfg.AlertBatchSize, err = uintEnv("ALERT_BATCH_SIZE", 500)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertLookback, err = durationEnv("ALERT_LOOKBACK", time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertPollInterval, err = durationEnv("ALERT_POLL_INTERVAL", 5*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertCriticalUSD = env("ALERT_CRITICAL_USD", "50000")
+	cfg.AlertQuoteSymbols = env(
+		"ALERT_QUOTE_SYMBOLS",
+		"WETH,USDC,USDBC,USDT,DAI,EURC,CBBTC",
+	)
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
 	cfg.ConsumerGroup = env("REDPANDA_CONSUMER_GROUP", "base-clickhouse-writer-v1")

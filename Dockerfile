@@ -11,7 +11,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldfl
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/event-parser ./cmd/event-parser && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/registry-backfill ./cmd/registry-backfill && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/market-sync ./cmd/market-sync && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/valuation-worker ./cmd/valuation-worker
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/valuation-worker ./cmd/valuation-worker && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/alert-worker ./cmd/alert-worker
 
 FROM gcr.io/distroless/static-debian12:nonroot AS block-ingestor
 COPY --from=builder /out/block-ingestor /block-ingestor
@@ -36,3 +37,7 @@ ENTRYPOINT ["/market-sync"]
 FROM gcr.io/distroless/static-debian12:nonroot AS valuation-worker
 COPY --from=builder /out/valuation-worker /valuation-worker
 ENTRYPOINT ["/valuation-worker"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS alert-worker
+COPY --from=builder /out/alert-worker /alert-worker
+ENTRYPOINT ["/alert-worker"]

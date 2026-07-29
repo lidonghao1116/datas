@@ -240,6 +240,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  alert-worker:
+    build:
+      context: .
+      target: alert-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      ALERT_BATCH_SIZE: ${ALERT_BATCH_SIZE:-500}
+      ALERT_LOOKBACK: ${ALERT_LOOKBACK:-1h}
+      ALERT_POLL_INTERVAL: ${ALERT_POLL_INTERVAL:-5s}
+      ALERT_CRITICAL_USD: ${ALERT_CRITICAL_USD:-50000}
+      ALERT_QUOTE_SYMBOLS: ${ALERT_QUOTE_SYMBOLS:-WETH,USDC,USDbC,USDT,DAI,EURC,cbBTC}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:
