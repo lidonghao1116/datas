@@ -36,6 +36,15 @@ type Config struct {
 	AlertPollInterval            time.Duration
 	AlertCriticalUSD             string
 	AlertQuoteSymbols            string
+	AlertWebhookURL              string
+	AlertWebhookSecret           string
+	AlertDeliveryBatchSize       uint64
+	AlertDeliveryLease           time.Duration
+	AlertDeliveryPollInterval    time.Duration
+	AlertDeliveryTimeout         time.Duration
+	AlertDeliveryMaxAttempts     uint64
+	AlertDeliveryRetryBase       time.Duration
+	AlertDeliveryRetryMax        time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -157,6 +166,45 @@ func Load() (Config, error) {
 		"ALERT_QUOTE_SYMBOLS",
 		"WETH,USDC,USDBC,USDT,DAI,EURC,CBBTC",
 	)
+	cfg.AlertWebhookURL = strings.TrimSpace(os.Getenv("ALERT_WEBHOOK_URL"))
+	cfg.AlertWebhookSecret = os.Getenv("ALERT_WEBHOOK_SECRET")
+	cfg.AlertDeliveryBatchSize, err = uintEnv("ALERT_DELIVERY_BATCH_SIZE", 20)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertDeliveryLease, err = durationEnv("ALERT_DELIVERY_LEASE", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertDeliveryPollInterval, err = durationEnv(
+		"ALERT_DELIVERY_POLL_INTERVAL",
+		2*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertDeliveryTimeout, err = durationEnv("ALERT_DELIVERY_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertDeliveryMaxAttempts, err = uintEnv("ALERT_DELIVERY_MAX_ATTEMPTS", 8)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertDeliveryRetryBase, err = durationEnv(
+		"ALERT_DELIVERY_RETRY_BASE",
+		5*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AlertDeliveryRetryMax, err = durationEnv(
+		"ALERT_DELIVERY_RETRY_MAX",
+		15*time.Minute,
+	)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
 	cfg.ConsumerGroup = env("REDPANDA_CONSUMER_GROUP", "base-clickhouse-writer-v1")

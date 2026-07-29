@@ -262,6 +262,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  alert-dispatcher:
+    build:
+      context: .
+      target: alert-dispatcher
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      ALERT_DELIVERY_BATCH_SIZE: ${ALERT_DELIVERY_BATCH_SIZE:-20}
+      ALERT_DELIVERY_LEASE: ${ALERT_DELIVERY_LEASE:-30s}
+      ALERT_DELIVERY_POLL_INTERVAL: ${ALERT_DELIVERY_POLL_INTERVAL:-2s}
+      ALERT_DELIVERY_TIMEOUT: ${ALERT_DELIVERY_TIMEOUT:-10s}
+      ALERT_DELIVERY_MAX_ATTEMPTS: ${ALERT_DELIVERY_MAX_ATTEMPTS:-8}
+      ALERT_DELIVERY_RETRY_BASE: ${ALERT_DELIVERY_RETRY_BASE:-5s}
+      ALERT_DELIVERY_RETRY_MAX: ${ALERT_DELIVERY_RETRY_MAX:-15m}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:
