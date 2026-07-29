@@ -1,0 +1,183 @@
+name: base-analytics
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.1.9
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "19644:9644"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v3.1.3
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8082:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.1.9
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      RAW_BLOCK_TOPIC: ${REDPANDA_RAW_BLOCK_TOPIC:-base.block.raw.v1}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        rpk topic describe "$${RAW_BLOCK_TOPIC}" --brokers redpanda:9092 >/dev/null 2>&1 ||
+          rpk topic create "$${RAW_BLOCK_TOPIC}" --brokers redpanda:9092 --partitions 3 --replicas 1
+        rpk topic alter-config "$${RAW_BLOCK_TOPIC}" --brokers redpanda:9092 \
+          --set max.message.bytes=16777216 --no-confirm
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.6
+    environment:
+      CLICKHOUSE_DB: base
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--database", "base", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./migrations/clickhouse:/docker-entrypoint-initdb.d:ro
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: base
+      POSTGRES_USER: base
+      POSTGRES_PASSWORD: base
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U base -d base"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations/postgres:/docker-entrypoint-initdb.d:ro
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: base
+      MINIO_ROOT_PASSWORD: base-local-secret
+    ports:
+      - "9001:9001"
+      - "9002:9000"
+    volumes:
+      - minio-data:/data
+
+  migrate:
+    image: postgres:17-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for file in /migrations/postgres/*.sql; do
+          PGPASSWORD=base psql -h postgres -U base -d base -v ON_ERROR_STOP=1 -f "$$file"
+        done
+        for file in /migrations/clickhouse/*.sql; do
+          wget -O- --post-data="$$(cat "$$file")" "http://clickhouse:8123/?database=base"
+        done
+
+  block-ingestor:
+    build:
+      context: .
+      target: block-ingestor
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDPANDA_BROKERS: redpanda:9092
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  block-writer:
+    build:
+      context: .
+      target: block-writer
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDPANDA_BROKERS: redpanda:9092
+      CLICKHOUSE_ADDR: clickhouse:9000
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-parser:
+    build:
+      context: .
+      target: event-parser
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDPANDA_BROKERS: redpanda:9092
+      CLICKHOUSE_ADDR: clickhouse:9000
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redpanda-data:
+  clickhouse-data:
+  postgres-data:
+  redis-data:
+  minio-data:
