@@ -11,6 +11,7 @@ import (
 	"github.com/basewatch/base-analytics/internal/eventprocessor"
 	"github.com/basewatch/base-analytics/internal/observability"
 	"github.com/basewatch/base-analytics/internal/parser/logs"
+	"github.com/basewatch/base-analytics/internal/registry"
 	clickhousestore "github.com/basewatch/base-analytics/internal/storage/clickhouse"
 )
 
@@ -39,13 +40,34 @@ func main() {
 	}
 	defer store.Close()
 
+	registryStore, err := registry.OpenPostgres(ctx, cfg.PostgresDSN)
+	if err != nil {
+		logger.Error("open pool and token registry", "error", err)
+		os.Exit(1)
+	}
+	defer registryStore.Close()
+
+	contractReader, err := registry.OpenRPCReader(
+		ctx,
+		cfg.BaseHTTPURL,
+		cfg.RPCRequestTimeout,
+	)
+	if err != nil {
+		logger.Error("open registry RPC reader", "error", err)
+		os.Exit(1)
+	}
+	defer contractReader.Close()
+	resolver := registry.NewResolver(registryStore, contractReader)
+
 	service, err := eventprocessor.New(
 		cfg.RedpandaBrokers,
 		cfg.RawBlockTopic,
 		cfg.EventParserConsumerGroup,
 		logs.NewParser(),
+		resolver,
 		store,
 		logger,
+		cfg.RegistryEnrichmentTimeout,
 	)
 	if err != nil {
 		logger.Error("open event parser", "error", err)

@@ -9,22 +9,23 @@ import (
 )
 
 type Config struct {
-	BaseHTTPURL              string
-	BaseWSSURL               string
-	BaseChainID              uint64
-	StartBlock               uint64
-	RPCRequestTimeout        time.Duration
-	RPCReconnectDelay        time.Duration
-	RedpandaBrokers          []string
-	RawBlockTopic            string
-	ConsumerGroup            string
-	EventParserConsumerGroup string
-	PostgresDSN              string
-	ClickHouseAddr           string
-	ClickHouseDatabase       string
-	ClickHouseUsername       string
-	ClickHousePassword       string
-	LogLevel                 string
+	BaseHTTPURL               string
+	BaseWSSURL                string
+	BaseChainID               uint64
+	StartBlock                uint64
+	RPCRequestTimeout         time.Duration
+	RPCReconnectDelay         time.Duration
+	RegistryEnrichmentTimeout time.Duration
+	RedpandaBrokers           []string
+	RawBlockTopic             string
+	ConsumerGroup             string
+	EventParserConsumerGroup  string
+	PostgresDSN               string
+	ClickHouseAddr            string
+	ClickHouseDatabase        string
+	ClickHouseUsername        string
+	ClickHousePassword        string
+	LogLevel                  string
 }
 
 func Load() (Config, error) {
@@ -49,12 +50,19 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	cfg.RegistryEnrichmentTimeout, err = durationEnv(
+		"REGISTRY_ENRICHMENT_TIMEOUT",
+		time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
 	cfg.ConsumerGroup = env("REDPANDA_CONSUMER_GROUP", "base-clickhouse-writer-v1")
 	cfg.EventParserConsumerGroup = env(
 		"REDPANDA_EVENT_PARSER_CONSUMER_GROUP",
-		"base-event-parser-v1",
+		"base-event-parser-v4",
 	)
 	cfg.PostgresDSN = env("POSTGRES_DSN", "postgres://base:base@localhost:5432/base?sslmode=disable")
 	cfg.ClickHouseAddr = env("CLICKHOUSE_ADDR", "localhost:9000")

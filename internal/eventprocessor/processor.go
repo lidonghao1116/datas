@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -18,19 +19,27 @@ type EventStore interface {
 	Insert(ctx context.Context, result logs.Result) error
 }
 
+type SwapEnricher interface {
+	EnrichSwaps(ctx context.Context, swaps []domain.PoolSwap) []error
+}
+
 type Processor struct {
-	client *kgo.Client
-	parser *logs.Parser
-	store  EventStore
-	logger *slog.Logger
+	client            *kgo.Client
+	parser            *logs.Parser
+	enricher          SwapEnricher
+	store             EventStore
+	logger            *slog.Logger
+	enrichmentTimeout time.Duration
 }
 
 func New(
 	brokers []string,
 	topic, consumerGroup string,
 	parser *logs.Parser,
+	enricher SwapEnricher,
 	store EventStore,
 	logger *slog.Logger,
+	enrichmentTimeout time.Duration,
 ) (*Processor, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
@@ -44,10 +53,12 @@ func New(
 		return nil, fmt.Errorf("create event parser Kafka consumer: %w", err)
 	}
 	return &Processor{
-		client: client,
-		parser: parser,
-		store:  store,
-		logger: logger,
+		client:            client,
+		parser:            parser,
+		enricher:          enricher,
+		store:             store,
+		logger:            logger,
+		enrichmentTimeout: enrichmentTimeout,
 	}, nil
 }
 
@@ -96,6 +107,22 @@ func (p *Processor) handle(ctx context.Context, record *kgo.Record) error {
 	result, err := p.parser.Parse(envelope)
 	if err != nil {
 		return fmt.Errorf("parse events from block %d: %w", envelope.BlockNumber, err)
+	}
+	if p.enricher != nil {
+		enrichmentCtx := ctx
+		cancel := func() {}
+		if p.enrichmentTimeout > 0 {
+			enrichmentCtx, cancel = context.WithTimeout(ctx, p.enrichmentTimeout)
+		}
+		enrichmentErrors := p.enricher.EnrichSwaps(enrichmentCtx, result.Swaps)
+		cancel()
+		for _, enrichErr := range enrichmentErrors {
+			p.logger.Warn(
+				"swap metadata enrichment failed",
+				"block_number", envelope.BlockNumber,
+				"error", enrichErr,
+			)
+		}
 	}
 	if err := p.store.Insert(ctx, result); err != nil {
 		return fmt.Errorf("persist events from block %d: %w", envelope.BlockNumber, err)

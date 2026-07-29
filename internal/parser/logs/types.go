@@ -3,13 +3,14 @@ package logs
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/basewatch/base-analytics/internal/domain"
 )
 
-const ParserVersion = "logs-v1"
+const ParserVersion = "logs-v4"
 
 type RawLog struct {
 	Address          string         `json:"address"`
@@ -41,7 +42,7 @@ func metaFrom(envelope domain.RawBlockEnvelope, log RawLog) domain.EventMeta {
 		TransactionHash:  log.TransactionHash,
 		TransactionIndex: uint32(log.TransactionIndex),
 		LogIndex:         uint32(log.LogIndex),
-		ObservedAt:       envelope.ObservedAt,
+		ObservedAt:       time.Now().UTC(),
 		IsCanonical:      1,
 		ParserVersion:    ParserVersion,
 	}

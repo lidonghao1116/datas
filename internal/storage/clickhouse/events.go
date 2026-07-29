@@ -97,10 +97,12 @@ func (s *EventStore) insertSwaps(ctx context.Context, result logs.Result) error 
 	}
 	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO dex_pool_swaps (
 		event_id, schema_version, chain_id, block_number, block_hash, block_time,
-		transaction_hash, transaction_index, log_index, pool_address,
-		protocol_family, sender_address, recipient_address, amount0_delta_raw,
-		amount1_delta_raw, sqrt_price_x96_raw, liquidity_raw, tick,
-		parser_version, observed_at, is_canonical
+		transaction_hash, transaction_index, log_index, pool_address, factory_address,
+		protocol, protocol_version, protocol_family, token0_address, token1_address,
+		token0_symbol, token1_symbol, token0_decimals, token1_decimals,
+		metadata_status, sender_address, recipient_address, amount0_delta_raw,
+		amount1_delta_raw, sqrt_price_x96_raw, liquidity_raw, tick, parser_version,
+		observed_at, is_canonical
 	)`)
 	if err != nil {
 		return fmt.Errorf("prepare DEX swap batch: %w", err)
@@ -117,7 +119,17 @@ func (s *EventStore) insertSwaps(ctx context.Context, result logs.Result) error 
 			swap.TransactionIndex,
 			swap.LogIndex,
 			swap.PoolAddress,
+			swap.FactoryAddress,
+			swap.Protocol,
+			swap.ProtocolVersion,
 			swap.ProtocolFamily,
+			swap.Token0Address,
+			swap.Token1Address,
+			swap.Token0Symbol,
+			swap.Token1Symbol,
+			swap.Token0Decimals,
+			swap.Token1Decimals,
+			swap.MetadataStatus,
 			swap.SenderAddress,
 			swap.RecipientAddress,
 			swap.Amount0DeltaRaw,

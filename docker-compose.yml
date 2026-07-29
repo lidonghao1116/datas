@@ -168,10 +168,15 @@ services:
     environment:
       REDPANDA_BROKERS: redpanda:9092
       CLICKHOUSE_ADDR: clickhouse:9000
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      REGISTRY_ENRICHMENT_TIMEOUT: ${REGISTRY_ENRICHMENT_TIMEOUT:-1s}
+      REDPANDA_EVENT_PARSER_CONSUMER_GROUP: ${REDPANDA_EVENT_PARSER_CONSUMER_GROUP:-base-event-parser-v4}
     depends_on:
       redpanda-init:
         condition: service_completed_successfully
       clickhouse:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 

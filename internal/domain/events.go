@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const NormalizedEventSchemaVersion = "1"
+const NormalizedEventSchemaVersion = "2"
 
 type EventMeta struct {
 	SchemaVersion    string    `json:"schema_version"`
@@ -36,7 +36,17 @@ type ERC20Transfer struct {
 type PoolSwap struct {
 	EventMeta
 	PoolAddress      string `json:"pool_address"`
+	FactoryAddress   string `json:"factory_address"`
+	Protocol         string `json:"protocol"`
+	ProtocolVersion  string `json:"protocol_version"`
 	ProtocolFamily   string `json:"protocol_family"`
+	Token0Address    string `json:"token0_address"`
+	Token1Address    string `json:"token1_address"`
+	Token0Symbol     string `json:"token0_symbol"`
+	Token1Symbol     string `json:"token1_symbol"`
+	Token0Decimals   uint8  `json:"token0_decimals"`
+	Token1Decimals   uint8  `json:"token1_decimals"`
+	MetadataStatus   string `json:"metadata_status"`
 	SenderAddress    string `json:"sender_address"`
 	RecipientAddress string `json:"recipient_address"`
 	Amount0DeltaRaw  string `json:"amount0_delta_raw"`
