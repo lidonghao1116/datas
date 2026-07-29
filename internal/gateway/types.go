@@ -98,6 +98,7 @@ type WalletProfile struct {
 	FavoriteProtocol     string             `json:"favorite_protocol"`
 	ProfileUpdatedAt     time.Time          `json:"profile_updated_at"`
 	GMGN                 *GMGNWalletProfile `json:"gmgn,omitempty"`
+	SmartScore           *WalletSmartScore  `json:"smart_score,omitempty"`
 }
 
 type GMGNWalletProfile struct {
@@ -188,6 +189,76 @@ type WalletPosition struct {
 	PositionBasis    string    `json:"position_basis"`
 }
 
+type WalletSmartScore struct {
+	ChainID                   uint64    `json:"chain_id"`
+	WalletAddress             string    `json:"wallet_address"`
+	AnalyticsVersion          string    `json:"analytics_version"`
+	RealizedProfitUSDRaw      string    `json:"realized_profit_usd_raw"`
+	UnrealizedProfitUSDRaw    string    `json:"unrealized_profit_usd_raw"`
+	TotalProfitUSDRaw         string    `json:"total_profit_usd_raw"`
+	TotalInvestedUSDRaw       string    `json:"total_invested_usd_raw"`
+	ROIRaw                    string    `json:"roi_raw"`
+	WinRateRaw                string    `json:"win_rate_raw"`
+	SmartScoreRaw             string    `json:"smart_score_raw"`
+	SmartScoreGrade           string    `json:"smart_score_grade"`
+	PerformanceScoreRaw       string    `json:"performance_score_raw"`
+	WinRateScoreRaw           string    `json:"win_rate_score_raw"`
+	TrackRecordScoreRaw       string    `json:"track_record_score_raw"`
+	ActivityScoreRaw          string    `json:"activity_score_raw"`
+	RiskScoreRaw              string    `json:"risk_score_raw"`
+	ConfidenceRaw             string    `json:"confidence_raw"`
+	TradeCount                uint64    `json:"trade_count"`
+	ClosedSellCount           uint64    `json:"closed_sell_count"`
+	WinningSellCount          uint64    `json:"winning_sell_count"`
+	ActiveDays                uint64    `json:"active_days"`
+	UniqueNonQuoteTokens      uint64    `json:"unique_non_quote_tokens"`
+	RiskyTokenCount           uint64    `json:"risky_token_count"`
+	UnmatchedSellCount        uint64    `json:"unmatched_sell_count"`
+	MissingPricePositionCount uint64    `json:"missing_price_position_count"`
+	PartialValuationCount     uint64    `json:"partial_valuation_count"`
+	TransferInCount           uint64    `json:"transfer_in_count"`
+	TransferOutCount          uint64    `json:"transfer_out_count"`
+	HistoryIncomplete         bool      `json:"history_incomplete"`
+	SourceUpdatedAt           time.Time `json:"source_updated_at"`
+	CalculatedAt              time.Time `json:"calculated_at"`
+}
+
+type WalletTokenPnL struct {
+	ChainID                uint64     `json:"chain_id"`
+	WalletAddress          string     `json:"wallet_address"`
+	TokenAddress           string     `json:"token_address"`
+	TokenSymbol            string     `json:"token_symbol"`
+	AnalyticsVersion       string     `json:"analytics_version"`
+	IsQuoteToken           bool       `json:"is_quote_token"`
+	BoughtAmountRaw        string     `json:"bought_amount_raw"`
+	SoldAmountRaw          string     `json:"sold_amount_raw"`
+	RemainingAmountRaw     string     `json:"remaining_amount_raw"`
+	TotalBuyCostUSDRaw     string     `json:"total_buy_cost_usd_raw"`
+	TotalSellIncomeUSDRaw  string     `json:"total_sell_income_usd_raw"`
+	RemainingCostUSDRaw    string     `json:"remaining_cost_usd_raw"`
+	RealizedProfitUSDRaw   string     `json:"realized_profit_usd_raw"`
+	UnrealizedProfitUSDRaw string     `json:"unrealized_profit_usd_raw"`
+	TotalProfitUSDRaw      string     `json:"total_profit_usd_raw"`
+	CurrentValueUSDRaw     string     `json:"current_value_usd_raw"`
+	AverageCostUSDRaw      string     `json:"average_cost_usd_raw"`
+	CurrentPriceUSDRaw     string     `json:"current_price_usd_raw"`
+	BuyCount               uint64     `json:"buy_count"`
+	SellCount              uint64     `json:"sell_count"`
+	WinningSellCount       uint64     `json:"winning_sell_count"`
+	UnmatchedSellAmountRaw string     `json:"unmatched_sell_amount_raw"`
+	UnmatchedSellUSDRaw    string     `json:"unmatched_sell_usd_raw"`
+	IsHoneypot             bool       `json:"is_honeypot"`
+	HasMintMethod          bool       `json:"has_mint_method"`
+	HasBlackMethod         bool       `json:"has_black_method"`
+	IsProxy                bool       `json:"is_proxy"`
+	DataQuality            string     `json:"data_quality"`
+	FirstTradedAt          time.Time  `json:"first_traded_at"`
+	LastTradedAt           time.Time  `json:"last_traded_at"`
+	PriceUpdatedAt         *time.Time `json:"price_updated_at,omitempty"`
+	SourceUpdatedAt        time.Time  `json:"source_updated_at"`
+	CalculatedAt           time.Time  `json:"calculated_at"`
+}
+
 type AlertStore interface {
 	RecentAlerts(ctx context.Context, filter AlertFilter) ([]Alert, error)
 	AlertsAfter(
@@ -214,5 +285,16 @@ type AnalyticsStore interface {
 		address string,
 		limit int,
 	) ([]WalletPosition, error)
+	WalletSmartScore(
+		ctx context.Context,
+		chainID uint64,
+		address string,
+	) (WalletSmartScore, error)
+	WalletTokenPnL(
+		ctx context.Context,
+		chainID uint64,
+		address string,
+		limit int,
+	) ([]WalletTokenPnL, error)
 	Ping(ctx context.Context) error
 }

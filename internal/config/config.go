@@ -60,6 +60,9 @@ type Config struct {
 	GMGNWalletActiveLookback     time.Duration
 	GMGNWalletSyncInterval       time.Duration
 	GMGNWalletRetryBase          time.Duration
+	WalletAnalyticsBatchSize     uint64
+	WalletAnalyticsPollInterval  time.Duration
+	WalletAnalyticsMaxPriceAge   time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -299,6 +302,30 @@ func Load() (Config, error) {
 		cfg.GMGNWalletSyncInterval <= 0 ||
 		cfg.GMGNWalletRetryBase <= 0 {
 		return Config{}, fmt.Errorf("GMGN durations must be positive")
+	}
+	cfg.WalletAnalyticsBatchSize, err = uintEnv("WALLET_ANALYTICS_BATCH_SIZE", 20)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.WalletAnalyticsBatchSize == 0 {
+		return Config{}, fmt.Errorf("WALLET_ANALYTICS_BATCH_SIZE must be positive")
+	}
+	cfg.WalletAnalyticsPollInterval, err = durationEnv(
+		"WALLET_ANALYTICS_POLL_INTERVAL",
+		5*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.WalletAnalyticsMaxPriceAge, err = durationEnv(
+		"WALLET_ANALYTICS_MAX_PRICE_AGE",
+		2*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.WalletAnalyticsPollInterval <= 0 || cfg.WalletAnalyticsMaxPriceAge <= 0 {
+		return Config{}, fmt.Errorf("wallet analytics durations must be positive")
 	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")

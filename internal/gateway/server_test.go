@@ -55,6 +55,9 @@ type fakeAnalyticsStore struct {
 	profileErr    error
 	walletTrades  []WalletTrade
 	positions     []WalletPosition
+	score         WalletSmartScore
+	scoreErr      error
+	tokenPnL      []WalletTokenPnL
 	tradeLimit    int
 	walletLimit   int
 	tokenAddress  string
@@ -108,6 +111,26 @@ func (s *fakeAnalyticsStore) WalletPositions(
 	s.walletAddress = address
 	s.walletLimit = limit
 	return s.positions, nil
+}
+
+func (s *fakeAnalyticsStore) WalletSmartScore(
+	_ context.Context,
+	_ uint64,
+	address string,
+) (WalletSmartScore, error) {
+	s.walletAddress = address
+	return s.score, s.scoreErr
+}
+
+func (s *fakeAnalyticsStore) WalletTokenPnL(
+	_ context.Context,
+	_ uint64,
+	address string,
+	limit int,
+) ([]WalletTokenPnL, error) {
+	s.walletAddress = address
+	s.walletLimit = limit
+	return s.tokenPnL, nil
 }
 
 func (s *fakeAnalyticsStore) Ping(context.Context) error {
@@ -244,6 +267,29 @@ func TestWalletTradesClampsLimit(t *testing.T) {
 	}
 	if analytics.walletLimit != maxPageLimit {
 		t.Fatalf("wallet limit = %d", analytics.walletLimit)
+	}
+}
+
+func TestWalletPnLReturnsSummaryAndClampsLimit(t *testing.T) {
+	analytics := &fakeAnalyticsStore{
+		score:    WalletSmartScore{SmartScoreRaw: "72.5"},
+		tokenPnL: []WalletTokenPnL{{TokenAddress: "0xtoken"}},
+	}
+	server := newTestServer(t, &fakeAlertStore{}, analytics)
+	response := httptest.NewRecorder()
+	server.Handler(context.Background()).ServeHTTP(
+		response,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/v1/wallets/0xabc0000000000000000000000000000000000000/pnl?limit=999",
+			nil,
+		),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if analytics.walletLimit != maxPageLimit {
+		t.Fatalf("wallet PnL limit = %d", analytics.walletLimit)
 	}
 }
 

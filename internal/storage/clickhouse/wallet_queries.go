@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -139,6 +140,12 @@ func (s *EventStore) WalletProfile(
 		}
 	}
 	if err := s.populateGMGNWalletProfile(ctx, &profile); err != nil {
+		return gateway.WalletProfile{}, err
+	}
+	score, err := s.WalletSmartScore(ctx, profile.ChainID, profile.WalletAddress)
+	if err == nil {
+		profile.SmartScore = &score
+	} else if !errors.Is(err, gateway.ErrNotFound) {
 		return gateway.WalletProfile{}, err
 	}
 	return profile, nil

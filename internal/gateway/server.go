@@ -212,6 +212,10 @@ func (s *Server) wallet(writer http.ResponseWriter, request *http.Request) {
 		s.walletTrades(writer, request, address)
 	case "positions":
 		s.walletPositions(writer, request, address)
+	case "score":
+		s.walletScore(writer, request, address)
+	case "pnl":
+		s.walletPnL(writer, request, address)
 	default:
 		writeError(writer, http.StatusBadRequest, "invalid wallet resource")
 	}
@@ -271,6 +275,58 @@ func (s *Server) walletPositions(
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"data": positions})
+}
+
+func (s *Server) walletScore(
+	writer http.ResponseWriter,
+	request *http.Request,
+	address string,
+) {
+	score, err := s.analytics.WalletSmartScore(request.Context(), 8453, address)
+	if errors.Is(err, ErrNotFound) {
+		writeError(writer, http.StatusNotFound, "wallet score not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("query wallet score", "wallet_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"data": score})
+}
+
+func (s *Server) walletPnL(
+	writer http.ResponseWriter,
+	request *http.Request,
+	address string,
+) {
+	limit, err := queryLimit(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	score, err := s.analytics.WalletSmartScore(request.Context(), 8453, address)
+	if errors.Is(err, ErrNotFound) {
+		writeError(writer, http.StatusNotFound, "wallet PnL not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("query wallet PnL summary", "wallet_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	tokens, err := s.analytics.WalletTokenPnL(request.Context(), 8453, address, limit)
+	if err != nil {
+		s.logger.Error("query wallet token PnL", "wallet_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"data": map[string]any{
+			"summary": score,
+			"tokens":  tokens,
+		},
+	})
 }
 
 func (s *Server) websocketAlerts(ctx context.Context) http.HandlerFunc {

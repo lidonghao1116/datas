@@ -346,6 +346,26 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  wallet-analytics-worker:
+    build:
+      context: .
+      target: wallet-analytics-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      WALLET_ANALYTICS_BATCH_SIZE: ${WALLET_ANALYTICS_BATCH_SIZE:-20}
+      WALLET_ANALYTICS_POLL_INTERVAL: ${WALLET_ANALYTICS_POLL_INTERVAL:-5s}
+      WALLET_ANALYTICS_MAX_PRICE_AGE: ${WALLET_ANALYTICS_MAX_PRICE_AGE:-2h}
+      ALERT_QUOTE_SYMBOLS: ${ALERT_QUOTE_SYMBOLS:-WETH,USDC,USDbC,USDT,DAI,EURC,cbBTC}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      wallet-profile-worker:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:
