@@ -9,23 +9,26 @@ import (
 )
 
 type Config struct {
-	BaseHTTPURL               string
-	BaseWSSURL                string
-	BaseChainID               uint64
-	StartBlock                uint64
-	RPCRequestTimeout         time.Duration
-	RPCReconnectDelay         time.Duration
-	RegistryEnrichmentTimeout time.Duration
-	RedpandaBrokers           []string
-	RawBlockTopic             string
-	ConsumerGroup             string
-	EventParserConsumerGroup  string
-	PostgresDSN               string
-	ClickHouseAddr            string
-	ClickHouseDatabase        string
-	ClickHouseUsername        string
-	ClickHousePassword        string
-	LogLevel                  string
+	BaseHTTPURL                  string
+	BaseWSSURL                   string
+	BaseChainID                  uint64
+	StartBlock                   uint64
+	RPCRequestTimeout            time.Duration
+	RPCReconnectDelay            time.Duration
+	RegistryEnrichmentTimeout    time.Duration
+	RegistryBackfillBatchSize    uint64
+	RegistryBackfillBatchTimeout time.Duration
+	RegistryBackfillScanInterval time.Duration
+	RedpandaBrokers              []string
+	RawBlockTopic                string
+	ConsumerGroup                string
+	EventParserConsumerGroup     string
+	PostgresDSN                  string
+	ClickHouseAddr               string
+	ClickHouseDatabase           string
+	ClickHouseUsername           string
+	ClickHousePassword           string
+	LogLevel                     string
 }
 
 func Load() (Config, error) {
@@ -52,7 +55,28 @@ func Load() (Config, error) {
 	}
 	cfg.RegistryEnrichmentTimeout, err = durationEnv(
 		"REGISTRY_ENRICHMENT_TIMEOUT",
-		time.Second,
+		100*time.Millisecond,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.RegistryBackfillBatchSize, err = uintEnv("REGISTRY_BACKFILL_BATCH_SIZE", 100)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.RegistryBackfillBatchSize == 0 {
+		return Config{}, fmt.Errorf("REGISTRY_BACKFILL_BATCH_SIZE must be positive")
+	}
+	cfg.RegistryBackfillBatchTimeout, err = durationEnv(
+		"REGISTRY_BACKFILL_BATCH_TIMEOUT",
+		2*time.Minute,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.RegistryBackfillScanInterval, err = durationEnv(
+		"REGISTRY_BACKFILL_SCAN_INTERVAL",
+		30*time.Second,
 	)
 	if err != nil {
 		return Config{}, err

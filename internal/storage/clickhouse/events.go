@@ -8,6 +8,8 @@ import (
 	clickhouseclient "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 
+	"github.com/basewatch/base-analytics/internal/backfill"
+	"github.com/basewatch/base-analytics/internal/domain"
 	"github.com/basewatch/base-analytics/internal/parser/logs"
 )
 
@@ -48,6 +50,89 @@ func (s *EventStore) Insert(ctx context.Context, result logs.Result) error {
 		return err
 	}
 	return nil
+}
+
+func (s *EventStore) PendingSwaps(
+	ctx context.Context,
+	after backfill.Cursor,
+	limit int,
+) ([]domain.PoolSwap, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT
+			schema_version, chain_id, block_number, block_hash, block_time,
+			transaction_hash, transaction_index, log_index, pool_address,
+			factory_address, protocol, protocol_version, protocol_family,
+			token0_address, token1_address, token0_symbol, token1_symbol,
+			token0_decimals, token1_decimals, metadata_status, sender_address,
+			recipient_address, amount0_delta_raw, amount1_delta_raw,
+			sqrt_price_x96_raw, liquidity_raw, tick, parser_version,
+			observed_at, is_canonical
+		FROM dex_pool_swaps FINAL
+		WHERE metadata_status IN ('unresolved', 'partial')
+		  AND is_canonical = 1
+		  AND (chain_id, block_number, transaction_index, log_index, event_id) >
+		      (?, ?, ?, ?, ?)
+		ORDER BY chain_id, block_number, transaction_index, log_index, event_id
+		LIMIT ?`,
+		after.ChainID,
+		after.BlockNumber,
+		after.TransactionIndex,
+		after.LogIndex,
+		after.EventID,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query pending DEX swaps: %w", err)
+	}
+	defer rows.Close()
+
+	swaps := make([]domain.PoolSwap, 0, limit)
+	for rows.Next() {
+		var swap domain.PoolSwap
+		if err := rows.Scan(
+			&swap.SchemaVersion,
+			&swap.ChainID,
+			&swap.BlockNumber,
+			&swap.BlockHash,
+			&swap.BlockTime,
+			&swap.TransactionHash,
+			&swap.TransactionIndex,
+			&swap.LogIndex,
+			&swap.PoolAddress,
+			&swap.FactoryAddress,
+			&swap.Protocol,
+			&swap.ProtocolVersion,
+			&swap.ProtocolFamily,
+			&swap.Token0Address,
+			&swap.Token1Address,
+			&swap.Token0Symbol,
+			&swap.Token1Symbol,
+			&swap.Token0Decimals,
+			&swap.Token1Decimals,
+			&swap.MetadataStatus,
+			&swap.SenderAddress,
+			&swap.RecipientAddress,
+			&swap.Amount0DeltaRaw,
+			&swap.Amount1DeltaRaw,
+			&swap.SqrtPriceX96Raw,
+			&swap.LiquidityRaw,
+			&swap.Tick,
+			&swap.ParserVersion,
+			&swap.ObservedAt,
+			&swap.IsCanonical,
+		); err != nil {
+			return nil, fmt.Errorf("scan pending DEX swap: %w", err)
+		}
+		swaps = append(swaps, swap)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending DEX swaps: %w", err)
+	}
+	return swaps, nil
+}
+
+func (s *EventStore) UpsertSwaps(ctx context.Context, swaps []domain.PoolSwap) error {
+	return s.insertSwaps(ctx, logs.Result{Swaps: swaps})
 }
 
 func (s *EventStore) insertTransfers(ctx context.Context, result logs.Result) error {

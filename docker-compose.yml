@@ -169,11 +169,31 @@ services:
       REDPANDA_BROKERS: redpanda:9092
       CLICKHOUSE_ADDR: clickhouse:9000
       POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
-      REGISTRY_ENRICHMENT_TIMEOUT: ${REGISTRY_ENRICHMENT_TIMEOUT:-1s}
+      REGISTRY_ENRICHMENT_TIMEOUT: ${REGISTRY_ENRICHMENT_TIMEOUT:-100ms}
       REDPANDA_EVENT_PARSER_CONSUMER_GROUP: ${REDPANDA_EVENT_PARSER_CONSUMER_GROUP:-base-event-parser-v4}
     depends_on:
       redpanda-init:
         condition: service_completed_successfully
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  registry-backfill:
+    build:
+      context: .
+      target: registry-backfill
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      REGISTRY_BACKFILL_BATCH_SIZE: ${REGISTRY_BACKFILL_BATCH_SIZE:-100}
+      REGISTRY_BACKFILL_BATCH_TIMEOUT: ${REGISTRY_BACKFILL_BATCH_TIMEOUT:-2m}
+      REGISTRY_BACKFILL_SCAN_INTERVAL: ${REGISTRY_BACKFILL_SCAN_INTERVAL:-30s}
+    depends_on:
       clickhouse:
         condition: service_healthy
       postgres:

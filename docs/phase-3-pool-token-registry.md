@@ -21,10 +21,35 @@ This keeps the public Base RPC fallback usable while allowing a production RPC
 endpoint to be configured through `BASE_HTTP_URL`.
 
 Each block has a bounded enrichment budget, configured with
-`REGISTRY_ENRICHMENT_TIMEOUT` (default `1s`). Cached metadata is applied
+`REGISTRY_ENRICHMENT_TIMEOUT` (default `100ms`). Cached metadata is applied
 immediately. If the budget expires, the swap is still persisted as
 `unresolved` and its pool is retried on a later observation. This prevents
 public RPC throttling from blocking the Kafka fact-data path.
+
+## Asynchronous backfill
+
+The `registry-backfill` service continuously scans `unresolved` and `partial`
+swaps from ClickHouse in stable event-key order. It uses the same PostgreSQL
+registry and on-chain resolver, then reinserts enriched rows with a newer
+`observed_at`. `ReplacingMergeTree(observed_at)` replaces the previous version
+without an expensive mutation.
+
+The worker advances its in-memory cursor even when individual pools fail, so a
+bad contract or rate-limited call cannot block the rest of the scan. At the end
+of the dataset it resets the cursor, waits, and retries remaining rows.
+
+Configuration:
+
+- `REGISTRY_BACKFILL_BATCH_SIZE` (default `100`);
+- `REGISTRY_BACKFILL_BATCH_TIMEOUT` (default `2m`);
+- `REGISTRY_BACKFILL_SCAN_INTERVAL` (default `30s`).
+
+Run it with:
+
+```shell
+docker compose up -d registry-backfill
+docker compose logs -f registry-backfill
+```
 
 ## PostgreSQL tables
 
