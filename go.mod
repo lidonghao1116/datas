@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.3
 	github.com/ethereum/go-ethereum v1.16.7
+	github.com/gorilla/websocket v1.4.2
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/twmb/franz-go v1.19.5
 )
@@ -20,7 +21,6 @@ require (
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

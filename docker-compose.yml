@@ -283,6 +283,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  query-api:
+    build:
+      context: .
+      target: query-api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      CLICKHOUSE_ADDR: clickhouse:9000
+      API_LISTEN_ADDRESS: ${API_LISTEN_ADDRESS:-:8080}
+      API_ALERT_POLL_INTERVAL: ${API_ALERT_POLL_INTERVAL:-1s}
+      API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "8080:8080"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:

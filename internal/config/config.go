@@ -45,6 +45,9 @@ type Config struct {
 	AlertDeliveryMaxAttempts     uint64
 	AlertDeliveryRetryBase       time.Duration
 	AlertDeliveryRetryMax        time.Duration
+	APIListenAddress             string
+	APIAlertPollInterval         time.Duration
+	APIAllowedOrigins            []string
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -205,6 +208,18 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	cfg.APIListenAddress = env("API_LISTEN_ADDRESS", ":8080")
+	cfg.APIAlertPollInterval, err = durationEnv("API_ALERT_POLL_INTERVAL", time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.APIAlertPollInterval <= 0 {
+		return Config{}, fmt.Errorf("API_ALERT_POLL_INTERVAL must be positive")
+	}
+	cfg.APIAllowedOrigins = splitEnv(
+		"API_ALLOWED_ORIGINS",
+		"http://localhost:3000,http://localhost:5173",
+	)
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
 	cfg.ConsumerGroup = env("REDPANDA_CONSUMER_GROUP", "base-clickhouse-writer-v1")
