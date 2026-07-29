@@ -188,6 +188,10 @@ func (e *Engine) buildAlerts(candidate Candidate) ([]Alert, error) {
 	return alerts, nil
 }
 
+func (e *Engine) BuildAlerts(candidate Candidate) ([]Alert, error) {
+	return e.buildAlerts(candidate)
+}
+
 func (e *Engine) isSmartMoney(candidate Candidate, value *big.Rat) bool {
 	if candidate.SmartScoreVersion != e.smartScoreVersion ||
 		value.Cmp(e.smartTradeMinUSD) < 0 {

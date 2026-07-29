@@ -67,6 +67,14 @@ type Config struct {
 	WalletAnalyticsBatchSize     uint64
 	WalletAnalyticsPollInterval  time.Duration
 	WalletAnalyticsMaxPriceAge   time.Duration
+	FlashblocksHTTPURL           string
+	FlashblocksWSSURL            string
+	FlashblocksReconciliationTTL time.Duration
+	FlashblocksReconcileBatch    uint64
+	FlashblocksReconcileInterval time.Duration
+	FlashblocksReconnectDelay    time.Duration
+	FlashblocksRequestTimeout    time.Duration
+	FlashblocksFallbackPoll      time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -334,6 +342,62 @@ func Load() (Config, error) {
 	}
 	if cfg.WalletAnalyticsPollInterval <= 0 || cfg.WalletAnalyticsMaxPriceAge <= 0 {
 		return Config{}, fmt.Errorf("wallet analytics durations must be positive")
+	}
+	cfg.FlashblocksHTTPURL = env(
+		"FLASHBLOCKS_HTTP_URL",
+		"https://mainnet-preconf.base.org",
+	)
+	cfg.FlashblocksWSSURL = env(
+		"FLASHBLOCKS_WSS_URL",
+		"wss://mainnet-preconf.base.org",
+	)
+	cfg.FlashblocksReconciliationTTL, err = durationEnv(
+		"FLASHBLOCKS_RECONCILIATION_TTL",
+		30*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.FlashblocksReconcileBatch, err = uintEnv("FLASHBLOCKS_RECONCILE_BATCH", 100)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.FlashblocksReconcileInterval, err = durationEnv(
+		"FLASHBLOCKS_RECONCILE_INTERVAL",
+		time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.FlashblocksReconnectDelay, err = durationEnv(
+		"FLASHBLOCKS_RECONNECT_DELAY",
+		30*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.FlashblocksRequestTimeout, err = durationEnv(
+		"FLASHBLOCKS_REQUEST_TIMEOUT",
+		2*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.FlashblocksFallbackPoll, err = durationEnv(
+		"FLASHBLOCKS_FALLBACK_POLL_INTERVAL",
+		2*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.FlashblocksHTTPURL == "" || cfg.FlashblocksWSSURL == "" ||
+		cfg.FlashblocksReconciliationTTL <= 0 ||
+		cfg.FlashblocksReconcileBatch == 0 ||
+		cfg.FlashblocksReconcileInterval <= 0 ||
+		cfg.FlashblocksReconnectDelay <= 0 ||
+		cfg.FlashblocksRequestTimeout <= 0 ||
+		cfg.FlashblocksFallbackPoll <= 0 {
+		return Config{}, fmt.Errorf("Flashblocks configuration is invalid")
 	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")

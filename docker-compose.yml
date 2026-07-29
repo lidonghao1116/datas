@@ -370,6 +370,40 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  flashblocks-worker:
+    build:
+      context: .
+      target: flashblocks-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BASE_HTTP_URL: ${BASE_HTTP_URL:-https://mainnet.base.org}
+      FLASHBLOCKS_HTTP_URL: ${FLASHBLOCKS_HTTP_URL:-https://mainnet-preconf.base.org}
+      FLASHBLOCKS_WSS_URL: ${FLASHBLOCKS_WSS_URL:-wss://mainnet-preconf.base.org}
+      CLICKHOUSE_ADDR: clickhouse:9000
+      POSTGRES_DSN: postgres://base:base@postgres:5432/base?sslmode=disable
+      FLASHBLOCKS_RECONCILIATION_TTL: ${FLASHBLOCKS_RECONCILIATION_TTL:-30s}
+      FLASHBLOCKS_RECONCILE_BATCH: ${FLASHBLOCKS_RECONCILE_BATCH:-100}
+      FLASHBLOCKS_RECONCILE_INTERVAL: ${FLASHBLOCKS_RECONCILE_INTERVAL:-1s}
+      FLASHBLOCKS_RECONNECT_DELAY: ${FLASHBLOCKS_RECONNECT_DELAY:-30s}
+      FLASHBLOCKS_REQUEST_TIMEOUT: ${FLASHBLOCKS_REQUEST_TIMEOUT:-2s}
+      FLASHBLOCKS_FALLBACK_POLL_INTERVAL: ${FLASHBLOCKS_FALLBACK_POLL_INTERVAL:-2s}
+      ALERT_CRITICAL_USD: ${ALERT_CRITICAL_USD:-50000}
+      ALERT_QUOTE_SYMBOLS: ${ALERT_QUOTE_SYMBOLS:-WETH,USDC,USDbC,USDT,DAI,EURC,cbBTC}
+      ALERT_SMART_SCORE_VERSION: ${ALERT_SMART_SCORE_VERSION:-smart-v1}
+      ALERT_SMART_SCORE_MIN: ${ALERT_SMART_SCORE_MIN:-65}
+      ALERT_SMART_CONFIDENCE_MIN: ${ALERT_SMART_CONFIDENCE_MIN:-0.6}
+      ALERT_SMART_TRADE_MIN_USD: ${ALERT_SMART_TRADE_MIN_USD:-1000}
+      VALUATION_MAX_PRICE_AGE: ${VALUATION_MAX_PRICE_AGE:-10m}
+      LARGE_TRADE_USD: ${LARGE_TRADE_USD:-10000}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:
