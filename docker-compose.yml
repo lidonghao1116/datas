@@ -404,6 +404,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  trace-worker:
+    profiles:
+      - archive
+    build:
+      context: .
+      target: trace-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ARCHIVE_RPC_URL: ${ARCHIVE_RPC_URL:-https://mainnet.base.org}
+      BASE_CHAIN_ID: ${BASE_CHAIN_ID:-8453}
+      CLICKHOUSE_ADDR: clickhouse:9000
+      TRACE_START_BLOCK: ${TRACE_START_BLOCK:-0}
+      TRACE_BATCH_SIZE: ${TRACE_BATCH_SIZE:-5}
+      TRACE_POLL_INTERVAL: ${TRACE_POLL_INTERVAL:-10s}
+      TRACE_REQUEST_TIMEOUT: ${TRACE_REQUEST_TIMEOUT:-30s}
+      TRACE_TRACER_TIMEOUT: ${TRACE_TRACER_TIMEOUT:-20s}
+      TRACE_MIN_REQUEST_INTERVAL: ${TRACE_MIN_REQUEST_INTERVAL:-1s}
+      TRACE_MAX_ATTEMPTS: ${TRACE_MAX_ATTEMPTS:-5}
+      TRACE_RETRY_BASE: ${TRACE_RETRY_BASE:-30s}
+      TRACE_RETRY_MAX: ${TRACE_RETRY_MAX:-30m}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:

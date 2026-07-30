@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 const (
@@ -73,8 +74,39 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux.HandleFunc("/api/v1/trades/large", s.recentLargeTrades)
 	mux.HandleFunc("/api/v1/tokens/", s.tokenMarket)
 	mux.HandleFunc("/api/v1/wallets/", s.wallet)
+	mux.HandleFunc("/api/v1/transactions/", s.transactionTrace)
 	mux.HandleFunc("/ws/alerts", s.websocketAlerts(ctx))
 	return s.cors(mux)
+}
+
+func (s *Server) transactionTrace(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		methodNotAllowed(writer)
+		return
+	}
+	path := strings.TrimPrefix(request.URL.Path, "/api/v1/transactions/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[1] != "trace" {
+		writeError(writer, http.StatusBadRequest, "invalid transaction trace resource")
+		return
+	}
+	hashBytes, err := hexutil.Decode(parts[0])
+	if err != nil || len(hashBytes) != common.HashLength {
+		writeError(writer, http.StatusBadRequest, "invalid transaction hash")
+		return
+	}
+	hash := strings.ToLower(common.BytesToHash(hashBytes).Hex())
+	trace, err := s.analytics.TransactionTrace(request.Context(), 8453, hash)
+	if errors.Is(err, ErrNotFound) {
+		writeError(writer, http.StatusNotFound, "transaction trace not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("query transaction trace", "transaction_hash", hash, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"data": trace})
 }
 
 func (s *Server) Run(ctx context.Context, address string) error {
