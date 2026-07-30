@@ -72,7 +72,7 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/api/v1/alerts", s.recentAlerts)
 	mux.HandleFunc("/api/v1/trades/large", s.recentLargeTrades)
-	mux.HandleFunc("/api/v1/tokens/", s.tokenMarket)
+	mux.HandleFunc("/api/v1/tokens/", s.token)
 	mux.HandleFunc("/api/v1/wallets/", s.wallet)
 	mux.HandleFunc("/api/v1/transactions/", s.transactionTrace)
 	mux.HandleFunc("/ws/alerts", s.websocketAlerts(ctx))
@@ -197,19 +197,33 @@ func (s *Server) recentLargeTrades(writer http.ResponseWriter, request *http.Req
 	writeJSON(writer, http.StatusOK, map[string]any{"data": trades})
 }
 
-func (s *Server) tokenMarket(writer http.ResponseWriter, request *http.Request) {
+func (s *Server) token(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		methodNotAllowed(writer)
 		return
 	}
 	path := strings.TrimPrefix(request.URL.Path, "/api/v1/tokens/")
 	parts := strings.Split(path, "/")
-	if len(parts) != 2 || parts[1] != "market" || !common.IsHexAddress(parts[0]) {
-		writeError(writer, http.StatusBadRequest, "invalid token address")
+	if len(parts) != 2 || !common.IsHexAddress(parts[0]) {
+		writeError(writer, http.StatusBadRequest, "invalid token address or resource")
 		return
 	}
-	address := parts[0]
-	normalized := strings.ToLower(common.HexToAddress(address).Hex())
+	normalized := strings.ToLower(common.HexToAddress(parts[0]).Hex())
+	switch parts[1] {
+	case "market":
+		s.tokenMarket(writer, request, normalized)
+	case "dev":
+		s.tokenDevProfile(writer, request, normalized)
+	default:
+		writeError(writer, http.StatusBadRequest, "invalid token resource")
+	}
+}
+
+func (s *Server) tokenMarket(
+	writer http.ResponseWriter,
+	request *http.Request,
+	normalized string,
+) {
 	market, err := s.analytics.TokenMarket(request.Context(), 8453, normalized)
 	if errors.Is(err, ErrNotFound) {
 		writeError(writer, http.StatusNotFound, "token market not found")
@@ -221,6 +235,24 @@ func (s *Server) tokenMarket(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"data": market})
+}
+
+func (s *Server) tokenDevProfile(
+	writer http.ResponseWriter,
+	request *http.Request,
+	address string,
+) {
+	profile, err := s.analytics.TokenDevProfile(request.Context(), 8453, address)
+	if errors.Is(err, ErrNotFound) {
+		writeError(writer, http.StatusNotFound, "Token Dev profile not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("query Token Dev profile", "token_address", address, "error", err)
+		writeError(writer, http.StatusInternalServerError, "query failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"data": profile})
 }
 
 func (s *Server) wallet(writer http.ResponseWriter, request *http.Request) {
