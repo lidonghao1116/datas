@@ -53,6 +53,7 @@ func main() {
 		checkpoints,
 		cfg.BaseChainID,
 		cfg.StartBlock,
+		cfg.ReorgMaxDepth,
 		cfg.RPCReconnectDelay,
 		logger,
 	)

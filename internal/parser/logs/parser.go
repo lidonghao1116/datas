@@ -26,7 +26,7 @@ func (p *Parser) Parse(envelope domain.RawBlockEnvelope) (Result, error) {
 	if err := envelope.Validate(); err != nil {
 		return Result{}, err
 	}
-	var result Result
+	result := Result{ChainID: envelope.ChainID}
 	for receiptIndex, rawReceipt := range envelope.Receipts {
 		rawLogs, err := parseReceiptLogs(rawReceipt)
 		if err != nil {

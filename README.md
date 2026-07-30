@@ -22,6 +22,10 @@ PostgreSQL 保存采集 checkpoint，使采集器重启后能从上次成功发�
 - WSS 不可用或返回 `405 Method Not Allowed` 时，采集器自动使用 HTTP 轮询。
 - 区块成功发布到 Redpanda 后才推进 PostgreSQL checkpoint。
 - ClickHouse 写入成功后才提交 Kafka offset，因此链路支持 at-least-once 重放。
+- 每个区块的 `parent_hash` 会与 PostgreSQL canonical header 历史核对。发生短分叉时，
+  采集器寻找共同祖先、发布带重组元数据的新分支首块，并从共同祖先后重新采集。
+- 原始事实表和 ERC20/DEX 标准化表会按孤块 hash 将 `is_canonical` 修正为 `0`；
+  重组记录保存在 ClickHouse `chain_reorganizations`。
 
 ## 目录
 
@@ -124,6 +128,8 @@ http://localhost:8082
 - 设置具体 `START_BLOCK`：从指定高度开始历史回补。
 - `RPC_REQUEST_TIMEOUT=15s`：单次 HTTP RPC 调用的超时。
 - `RPC_RECONNECT_DELAY=3s`：RPC、订阅或区块处理失败后的重试间隔。
+- `REORG_MAX_DEPTH=128`：允许自动寻找共同祖先的最大深度；超过限制时停止推进
+  checkpoint，避免把无法验证的分支写成 canonical。
 - `BASE_WSS_URL` 不可用时不会中断采集，服务会回退到 HTTP 轮询。
 - 所有写入均使用稳定链上键和 `ReplacingMergeTree`，允许 at-least-once 重放。
 

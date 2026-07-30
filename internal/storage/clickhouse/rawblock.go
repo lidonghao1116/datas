@@ -59,6 +59,20 @@ func (s *RawBlockStore) Insert(ctx context.Context, envelope domain.RawBlockEnve
 	if err := envelope.Validate(); err != nil {
 		return err
 	}
+	if err := applyCanonicalCorrection(
+		ctx,
+		s.conn,
+		envelope.ChainID,
+		envelope.Reorganization,
+		rawCanonicalTables,
+	); err != nil {
+		return err
+	}
+	if envelope.Reorganization != nil {
+		if err := s.insertReorganization(ctx, envelope); err != nil {
+			return err
+		}
+	}
 
 	var block blockRecord
 	if err := json.Unmarshal(envelope.Block, &block); err != nil {
@@ -73,6 +87,41 @@ func (s *RawBlockStore) Insert(ctx context.Context, envelope domain.RawBlockEnve
 	}
 	if err := s.insertReceiptsAndLogs(ctx, envelope); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *RawBlockStore) insertReorganization(
+	ctx context.Context,
+	envelope domain.RawBlockEnvelope,
+) error {
+	reorganization := envelope.Reorganization
+	numbers := make([]uint64, 0, len(reorganization.OrphanedBlocks))
+	hashes := make([]string, 0, len(reorganization.OrphanedBlocks))
+	for _, block := range reorganization.OrphanedBlocks {
+		numbers = append(numbers, block.BlockNumber)
+		hashes = append(hashes, block.BlockHash)
+	}
+	if err := s.conn.Exec(
+		ctx,
+		`INSERT INTO chain_reorganizations (
+			chain_id, common_ancestor_number, common_ancestor_hash,
+			old_head_number, old_head_hash, new_branch_first_number,
+			new_branch_first_hash, orphaned_block_numbers,
+			orphaned_block_hashes, detected_at, applied_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now64(3))`,
+		envelope.ChainID,
+		reorganization.CommonAncestor.BlockNumber,
+		reorganization.CommonAncestor.BlockHash,
+		reorganization.OldHead.BlockNumber,
+		reorganization.OldHead.BlockHash,
+		envelope.BlockNumber,
+		envelope.BlockHash,
+		numbers,
+		hashes,
+		reorganization.DetectedAt,
+	); err != nil {
+		return fmt.Errorf("insert chain reorganization: %w", err)
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/basewatch/base-analytics/internal/chain/base"
@@ -26,6 +27,7 @@ type BlockIngestor struct {
 	checkpoints    checkpoint.Store
 	chainID        uint64
 	startBlock     uint64
+	maxReorgDepth  uint64
 	reconnectDelay time.Duration
 	logger         *slog.Logger
 }
@@ -36,6 +38,7 @@ func NewBlockIngestor(
 	checkpoints checkpoint.Store,
 	chainID uint64,
 	startBlock uint64,
+	maxReorgDepth uint64,
 	reconnectDelay time.Duration,
 	logger *slog.Logger,
 ) *BlockIngestor {
@@ -45,6 +48,7 @@ func NewBlockIngestor(
 		checkpoints:    checkpoints,
 		chainID:        chainID,
 		startBlock:     startBlock,
+		maxReorgDepth:  maxReorgDepth,
 		reconnectDelay: reconnectDelay,
 		logger:         logger,
 	}
@@ -135,7 +139,7 @@ func (i *BlockIngestor) nextBlock(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	if exists {
-		return last + 1, nil
+		return last.BlockNumber + 1, nil
 	}
 	if i.startBlock > 0 {
 		return i.startBlock, nil
@@ -153,27 +157,171 @@ func (i *BlockIngestor) processRange(ctx context.Context, next *uint64, target u
 		if err != nil {
 			return fmt.Errorf("fetch block %d: %w", *next, err)
 		}
+		reorganization, err := i.detectReorganization(ctx, envelope)
+		if err != nil {
+			return err
+		}
+		if reorganization != nil {
+			replacementNumber := reorganization.CommonAncestor.BlockNumber + 1
+			replacement := envelope
+			if replacement.BlockNumber != replacementNumber {
+				replacement, err = i.chain.FetchBlock(ctx, replacementNumber)
+				if err != nil {
+					return fmt.Errorf("fetch replacement block %d: %w", replacementNumber, err)
+				}
+			}
+			replacement.Reorganization = reorganization
+			if err := i.publisher.Publish(ctx, replacement); err != nil {
+				return err
+			}
+			if err := i.checkpoints.Rewind(
+				ctx,
+				PipelineName,
+				i.chainID,
+				checkpoint.Point{
+					BlockNumber: reorganization.CommonAncestor.BlockNumber,
+					BlockHash:   reorganization.CommonAncestor.BlockHash,
+				},
+			); err != nil {
+				return err
+			}
+			*next = replacementNumber
+			if err := i.saveCheckpoint(ctx, replacement); err != nil {
+				return err
+			}
+			i.logger.Warn(
+				"chain reorganization detected",
+				"common_ancestor", reorganization.CommonAncestor.BlockNumber,
+				"old_head", reorganization.OldHead.BlockNumber,
+				"orphaned_blocks", len(reorganization.OrphanedBlocks),
+			)
+			i.logPublished(replacement)
+			(*next)++
+			continue
+		}
 		if err := i.publisher.Publish(ctx, envelope); err != nil {
 			return err
 		}
-		if err := i.checkpoints.Save(
-			ctx,
-			PipelineName,
-			i.chainID,
-			envelope.BlockNumber,
-			envelope.BlockHash,
-		); err != nil {
+		if err := i.saveCheckpoint(ctx, envelope); err != nil {
 			return err
 		}
-		i.logger.Info(
-			"block published",
-			"block_number", envelope.BlockNumber,
-			"block_hash", envelope.BlockHash,
-			"receipt_count", len(envelope.Receipts),
-		)
+		i.logPublished(envelope)
 		(*next)++
 	}
 	return nil
+}
+
+func (i *BlockIngestor) saveCheckpoint(
+	ctx context.Context,
+	envelope domain.RawBlockEnvelope,
+) error {
+	return i.checkpoints.Save(
+		ctx,
+		PipelineName,
+		i.chainID,
+		envelope.BlockNumber,
+		envelope.BlockHash,
+	)
+}
+
+func (i *BlockIngestor) logPublished(envelope domain.RawBlockEnvelope) {
+	i.logger.Info(
+		"block published",
+		"block_number", envelope.BlockNumber,
+		"block_hash", envelope.BlockHash,
+		"receipt_count", len(envelope.Receipts),
+	)
+}
+
+func (i *BlockIngestor) detectReorganization(
+	ctx context.Context,
+	envelope domain.RawBlockEnvelope,
+) (*domain.ChainReorganization, error) {
+	if envelope.BlockNumber == 0 {
+		return nil, nil
+	}
+	previousNumber := envelope.BlockNumber - 1
+	storedParent, exists, err := i.checkpoints.Header(
+		ctx,
+		PipelineName,
+		i.chainID,
+		previousNumber,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !exists || equalHash(storedParent.BlockHash, envelope.ParentHash) {
+		return nil, nil
+	}
+
+	oldHead, exists, err := i.checkpoints.Load(ctx, PipelineName, i.chainID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("parent hash mismatch without an ingestion checkpoint")
+	}
+
+	candidateHash := envelope.ParentHash
+	height := previousNumber
+	for depth := uint64(0); depth <= i.maxReorgDepth; depth++ {
+		stored, found, err := i.checkpoints.Header(ctx, PipelineName, i.chainID, height)
+		if err != nil {
+			return nil, err
+		}
+		if found && equalHash(stored.BlockHash, candidateHash) {
+			orphaned, err := i.checkpoints.Range(
+				ctx,
+				PipelineName,
+				i.chainID,
+				height+1,
+				oldHead.BlockNumber,
+			)
+			if err != nil {
+				return nil, err
+			}
+			if len(orphaned) == 0 {
+				return nil, fmt.Errorf("reorganization at block %d has no orphaned history", envelope.BlockNumber)
+			}
+			references := make([]domain.BlockReference, 0, len(orphaned))
+			for _, point := range orphaned {
+				references = append(references, domain.BlockReference{
+					BlockNumber: point.BlockNumber,
+					BlockHash:   point.BlockHash,
+				})
+			}
+			return &domain.ChainReorganization{
+				CommonAncestor: domain.BlockReference{
+					BlockNumber: stored.BlockNumber,
+					BlockHash:   stored.BlockHash,
+				},
+				OldHead: domain.BlockReference{
+					BlockNumber: oldHead.BlockNumber,
+					BlockHash:   oldHead.BlockHash,
+				},
+				OrphanedBlocks: references,
+				DetectedAt:     time.Now().UTC(),
+			}, nil
+		}
+		if height == 0 || depth == i.maxReorgDepth {
+			break
+		}
+		candidate, err := i.chain.FetchBlock(ctx, height)
+		if err != nil {
+			return nil, fmt.Errorf("fetch candidate ancestor block %d: %w", height, err)
+		}
+		candidateHash = candidate.ParentHash
+		height--
+	}
+	return nil, fmt.Errorf(
+		"reorganization exceeds maximum depth %d at block %d",
+		i.maxReorgDepth,
+		envelope.BlockNumber,
+	)
+}
+
+func equalHash(left, right string) bool {
+	return strings.EqualFold(strings.TrimSpace(left), strings.TrimSpace(right))
 }
 
 func wait(ctx context.Context, delay time.Duration) bool {
