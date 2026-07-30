@@ -259,6 +259,53 @@ type WalletTokenPnL struct {
 	CalculatedAt           time.Time  `json:"calculated_at"`
 }
 
+type TransactionTrace struct {
+	TraceVersion       string            `json:"trace_version"`
+	ChainID            uint64            `json:"chain_id"`
+	BlockNumber        uint64            `json:"block_number"`
+	BlockHash          string            `json:"block_hash"`
+	BlockTime          time.Time         `json:"block_time"`
+	TransactionHash    string            `json:"transaction_hash"`
+	TransactionIndex   uint32            `json:"transaction_index"`
+	WalletAddress      string            `json:"wallet_address"`
+	TransactionTarget  string            `json:"transaction_target"`
+	RootSelector       string            `json:"root_selector"`
+	RootFunction       string            `json:"root_function"`
+	FrameCount         uint32            `json:"frame_count"`
+	MaxDepth           uint32            `json:"max_depth"`
+	FailedCallCount    uint32            `json:"failed_call_count"`
+	DelegatecallCount  uint32            `json:"delegatecall_count"`
+	PoolCallCount      uint32            `json:"pool_call_count"`
+	RouterAddresses    []string          `json:"router_addresses"`
+	MulticallSelectors []string          `json:"multicall_selectors"`
+	TracedAt           time.Time         `json:"traced_at"`
+	Calls              []TransactionCall `json:"calls"`
+}
+
+type TransactionCall struct {
+	TraceID            string   `json:"trace_id"`
+	TraceAddress       []uint32 `json:"trace_address"`
+	ParentTraceAddress []uint32 `json:"parent_trace_address"`
+	Depth              uint32   `json:"depth"`
+	CallType           string   `json:"call_type"`
+	FromAddress        string   `json:"from_address"`
+	ToAddress          string   `json:"to_address"`
+	ValueRaw           string   `json:"value_raw"`
+	GasRaw             string   `json:"gas_raw"`
+	GasUsedRaw         string   `json:"gas_used_raw"`
+	Input              string   `json:"input"`
+	Output             string   `json:"output"`
+	FunctionSelector   string   `json:"function_selector"`
+	FunctionName       string   `json:"function_name"`
+	Error              string   `json:"error"`
+	RevertReason       string   `json:"revert_reason"`
+	EmittedLogCount    uint32   `json:"emitted_log_count"`
+	Success            bool     `json:"success"`
+	IsPoolCall         bool     `json:"is_pool_call"`
+	IsRouterCall       bool     `json:"is_router_call"`
+	IsMulticall        bool     `json:"is_multicall"`
+}
+
 type AlertStore interface {
 	RecentAlerts(ctx context.Context, filter AlertFilter) ([]Alert, error)
 	AlertsAfter(
@@ -296,5 +343,10 @@ type AnalyticsStore interface {
 		address string,
 		limit int,
 	) ([]WalletTokenPnL, error)
+	TransactionTrace(
+		ctx context.Context,
+		chainID uint64,
+		transactionHash string,
+	) (TransactionTrace, error)
 	Ping(ctx context.Context) error
 }

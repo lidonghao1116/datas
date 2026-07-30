@@ -75,6 +75,16 @@ type Config struct {
 	FlashblocksReconnectDelay    time.Duration
 	FlashblocksRequestTimeout    time.Duration
 	FlashblocksFallbackPoll      time.Duration
+	ArchiveRPCURL                string
+	TraceStartBlock              uint64
+	TraceBatchSize               uint64
+	TracePollInterval            time.Duration
+	TraceRequestTimeout          time.Duration
+	TraceTracerTimeout           time.Duration
+	TraceMinRequestInterval      time.Duration
+	TraceMaxAttempts             uint64
+	TraceRetryBase               time.Duration
+	TraceRetryMax                time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -398,6 +408,57 @@ func Load() (Config, error) {
 		cfg.FlashblocksRequestTimeout <= 0 ||
 		cfg.FlashblocksFallbackPoll <= 0 {
 		return Config{}, fmt.Errorf("Flashblocks configuration is invalid")
+	}
+	cfg.ArchiveRPCURL = env("ARCHIVE_RPC_URL", cfg.BaseHTTPURL)
+	cfg.TraceStartBlock, err = uintEnv("TRACE_START_BLOCK", cfg.StartBlock)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceBatchSize, err = uintEnv("TRACE_BATCH_SIZE", 5)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TracePollInterval, err = durationEnv("TRACE_POLL_INTERVAL", 10*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceRequestTimeout, err = durationEnv("TRACE_REQUEST_TIMEOUT", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceTracerTimeout, err = durationEnv("TRACE_TRACER_TIMEOUT", 20*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceMinRequestInterval, err = durationEnv(
+		"TRACE_MIN_REQUEST_INTERVAL",
+		time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceMaxAttempts, err = uintEnv("TRACE_MAX_ATTEMPTS", 5)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceRetryBase, err = durationEnv("TRACE_RETRY_BASE", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TraceRetryMax, err = durationEnv("TRACE_RETRY_MAX", 30*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.ArchiveRPCURL == "" ||
+		cfg.TraceBatchSize == 0 ||
+		cfg.TracePollInterval <= 0 ||
+		cfg.TraceRequestTimeout <= 0 ||
+		cfg.TraceTracerTimeout <= 0 ||
+		cfg.TraceMinRequestInterval < 0 ||
+		cfg.TraceMaxAttempts == 0 ||
+		cfg.TraceRetryBase <= 0 ||
+		cfg.TraceRetryMax < cfg.TraceRetryBase {
+		return Config{}, fmt.Errorf("transaction trace configuration is invalid")
 	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")

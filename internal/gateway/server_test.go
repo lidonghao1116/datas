@@ -58,6 +58,8 @@ type fakeAnalyticsStore struct {
 	score         WalletSmartScore
 	scoreErr      error
 	tokenPnL      []WalletTokenPnL
+	trace         TransactionTrace
+	traceErr      error
 	tradeLimit    int
 	walletLimit   int
 	tokenAddress  string
@@ -133,6 +135,15 @@ func (s *fakeAnalyticsStore) WalletTokenPnL(
 	return s.tokenPnL, nil
 }
 
+func (s *fakeAnalyticsStore) TransactionTrace(
+	_ context.Context,
+	_ uint64,
+	transactionHash string,
+) (TransactionTrace, error) {
+	s.trace.TransactionHash = transactionHash
+	return s.trace, s.traceErr
+}
+
 func (s *fakeAnalyticsStore) Ping(context.Context) error {
 	return s.pingErr
 }
@@ -178,6 +189,44 @@ func TestRecentAlertsFiltersAndClampsLimit(t *testing.T) {
 		filter.Severity != "critical" ||
 		filter.Type != "large_buy" {
 		t.Fatalf("unexpected filter: %+v", filter)
+	}
+}
+
+func TestTransactionTrace(t *testing.T) {
+	const hash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	analytics := &fakeAnalyticsStore{trace: TransactionTrace{
+		TraceVersion: "call-v1",
+		FrameCount:   2,
+		Calls:        []TransactionCall{{TraceID: hash + ":root"}},
+	}}
+	server := newTestServer(t, &fakeAlertStore{}, analytics)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/transactions/"+hash+"/trace",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	server.Handler(context.Background()).ServeHTTP(response, request)
+	if response.Code != http.StatusOK ||
+		!strings.Contains(response.Body.String(), `"trace_version":"call-v1"`) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if analytics.trace.TransactionHash != hash {
+		t.Fatalf("unexpected normalized hash %s", analytics.trace.TransactionHash)
+	}
+}
+
+func TestTransactionTraceRejectsInvalidHash(t *testing.T) {
+	server := newTestServer(t, &fakeAlertStore{}, &fakeAnalyticsStore{})
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/transactions/0x1234/trace",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	server.Handler(context.Background()).ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 
