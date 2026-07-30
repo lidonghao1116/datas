@@ -64,3 +64,21 @@ func (p *Parser) Parse(envelope domain.RawBlockEnvelope) (Result, error) {
 	}
 	return result, nil
 }
+
+func (p *Parser) ParseSwap(
+	meta domain.EventMeta,
+	rawLog RawLog,
+) (domain.PoolSwap, bool, error) {
+	if rawLog.Removed || len(rawLog.Topics) == 0 {
+		return domain.PoolSwap{}, false, nil
+	}
+	decoder, exists := p.swapDecoders[strings.ToLower(rawLog.Topics[0])]
+	if !exists {
+		return domain.PoolSwap{}, false, nil
+	}
+	swap, err := decoder.Decode(meta, rawLog)
+	if err != nil {
+		return domain.PoolSwap{}, false, err
+	}
+	return swap, true, nil
+}
