@@ -431,6 +431,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  dev-analysis-worker:
+    build:
+      context: .
+      target: dev-analysis-worker
+    environment:
+      BASE_CHAIN_ID: ${BASE_CHAIN_ID:-8453}
+      CLICKHOUSE_ADDR: clickhouse:9000
+      DEV_ANALYSIS_BATCH_SIZE: ${DEV_ANALYSIS_BATCH_SIZE:-10}
+      DEV_ANALYSIS_EVIDENCE_LIMIT: ${DEV_ANALYSIS_EVIDENCE_LIMIT:-50}
+      DEV_ANALYSIS_POLL_INTERVAL: ${DEV_ANALYSIS_POLL_INTERVAL:-30s}
+      DEV_ANALYSIS_REFRESH_INTERVAL: ${DEV_ANALYSIS_REFRESH_INTERVAL:-6h}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   clickhouse-data:

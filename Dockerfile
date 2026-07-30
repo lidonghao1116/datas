@@ -19,7 +19,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldfl
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/gmgn-wallet-sync ./cmd/gmgn-wallet-sync && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/wallet-analytics-worker ./cmd/wallet-analytics-worker && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/flashblocks-worker ./cmd/flashblocks-worker && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/trace-worker ./cmd/trace-worker
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/trace-worker ./cmd/trace-worker && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/dev-analysis-worker ./cmd/dev-analysis-worker
 
 FROM gcr.io/distroless/static-debian12:nonroot AS block-ingestor
 COPY --from=builder /out/block-ingestor /block-ingestor
@@ -76,3 +77,7 @@ ENTRYPOINT ["/flashblocks-worker"]
 FROM gcr.io/distroless/static-debian12:nonroot AS trace-worker
 COPY --from=builder /out/trace-worker /trace-worker
 ENTRYPOINT ["/trace-worker"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS dev-analysis-worker
+COPY --from=builder /out/dev-analysis-worker /dev-analysis-worker
+ENTRYPOINT ["/dev-analysis-worker"]

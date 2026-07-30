@@ -76,6 +76,45 @@ type TokenMarket struct {
 	RiskUpdatedAt     *time.Time `json:"risk_updated_at,omitempty"`
 }
 
+type TokenDevProfile struct {
+	AnalysisVersion         string                 `json:"analysis_version"`
+	ChainID                 uint64                 `json:"chain_id"`
+	TokenAddress            string                 `json:"token_address"`
+	PrimaryDeployer         string                 `json:"primary_deployer"`
+	DeploymentTransaction   string                 `json:"deployment_transaction"`
+	DeploymentBlock         uint64                 `json:"deployment_block"`
+	DeployedAt              time.Time              `json:"deployed_at"`
+	RelatedAddressCount     uint64                 `json:"related_address_count"`
+	StrongRelatedCount      uint64                 `json:"strong_related_count"`
+	RelationshipTypes       []string               `json:"relationship_types"`
+	DeployedTokenCount      uint64                 `json:"deployed_token_count"`
+	RiskyDeployedTokenCount uint64                 `json:"risky_deployed_token_count"`
+	HoneypotTokenCount      uint64                 `json:"honeypot_token_count"`
+	BlackMethodTokenCount   uint64                 `json:"black_method_token_count"`
+	MintMethodTokenCount    uint64                 `json:"mint_method_token_count"`
+	ProxyTokenCount         uint64                 `json:"proxy_token_count"`
+	RiskScoreRaw            string                 `json:"risk_score_raw"`
+	RiskLevel               string                 `json:"risk_level"`
+	ConfidenceRaw           string                 `json:"confidence_raw"`
+	SourceUpdatedAt         time.Time              `json:"source_updated_at"`
+	CalculatedAt            time.Time              `json:"calculated_at"`
+	Relationships           []TokenDevRelationship `json:"relationships"`
+}
+
+type TokenDevRelationship struct {
+	PrimaryDeployer         string    `json:"primary_deployer"`
+	RelatedAddress          string    `json:"related_address"`
+	AddressKind             string    `json:"address_kind"`
+	RelationType            string    `json:"relation_type"`
+	Direction               string    `json:"direction"`
+	EvidenceCount           uint64    `json:"evidence_count"`
+	ConfidenceRaw           string    `json:"confidence_raw"`
+	FirstObservedAt         time.Time `json:"first_observed_at"`
+	LastObservedAt          time.Time `json:"last_observed_at"`
+	SampleTransactionHashes []string  `json:"sample_transaction_hashes"`
+	EvidenceSource          string    `json:"evidence_source"`
+}
+
 type WalletProfile struct {
 	ChainID              uint64             `json:"chain_id"`
 	WalletAddress        string             `json:"wallet_address"`
@@ -319,6 +358,11 @@ type AlertStore interface {
 type AnalyticsStore interface {
 	RecentLargeTrades(ctx context.Context, limit int) ([]LargeTrade, error)
 	TokenMarket(ctx context.Context, chainID uint64, address string) (TokenMarket, error)
+	TokenDevProfile(
+		ctx context.Context,
+		chainID uint64,
+		address string,
+	) (TokenDevProfile, error)
 	WalletProfile(ctx context.Context, chainID uint64, address string) (WalletProfile, error)
 	WalletTrades(
 		ctx context.Context,

@@ -51,6 +51,8 @@ type fakeAnalyticsStore struct {
 	trades        []LargeTrade
 	market        TokenMarket
 	marketErr     error
+	devProfile    TokenDevProfile
+	devProfileErr error
 	profile       WalletProfile
 	profileErr    error
 	walletTrades  []WalletTrade
@@ -82,6 +84,15 @@ func (s *fakeAnalyticsStore) TokenMarket(
 ) (TokenMarket, error) {
 	s.tokenAddress = address
 	return s.market, s.marketErr
+}
+
+func (s *fakeAnalyticsStore) TokenDevProfile(
+	_ context.Context,
+	_ uint64,
+	address string,
+) (TokenDevProfile, error) {
+	s.tokenAddress = address
+	return s.devProfile, s.devProfileErr
 }
 
 func (s *fakeAnalyticsStore) WalletProfile(
@@ -189,6 +200,32 @@ func TestRecentAlertsFiltersAndClampsLimit(t *testing.T) {
 		filter.Severity != "critical" ||
 		filter.Type != "large_buy" {
 		t.Fatalf("unexpected filter: %+v", filter)
+	}
+}
+
+func TestTokenDevProfile(t *testing.T) {
+	const address = "0x1111111111111111111111111111111111111111"
+	analytics := &fakeAnalyticsStore{devProfile: TokenDevProfile{
+		AnalysisVersion: "dev-v1",
+		RiskLevel:       "high",
+		Relationships: []TokenDevRelationship{{
+			RelationType: "deployer",
+		}},
+	}}
+	server := newTestServer(t, &fakeAlertStore{}, analytics)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/tokens/"+address+"/dev",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	server.Handler(context.Background()).ServeHTTP(response, request)
+	if response.Code != http.StatusOK ||
+		!strings.Contains(response.Body.String(), `"analysis_version":"dev-v1"`) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if analytics.tokenAddress != address {
+		t.Fatalf("unexpected token address %s", analytics.tokenAddress)
 	}
 }
 

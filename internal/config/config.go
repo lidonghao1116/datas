@@ -85,6 +85,10 @@ type Config struct {
 	TraceMaxAttempts             uint64
 	TraceRetryBase               time.Duration
 	TraceRetryMax                time.Duration
+	DevAnalysisBatchSize         uint64
+	DevAnalysisEvidenceLimit     uint64
+	DevAnalysisPollInterval      time.Duration
+	DevAnalysisRefreshInterval   time.Duration
 	RedpandaBrokers              []string
 	RawBlockTopic                string
 	ConsumerGroup                string
@@ -459,6 +463,34 @@ func Load() (Config, error) {
 		cfg.TraceRetryBase <= 0 ||
 		cfg.TraceRetryMax < cfg.TraceRetryBase {
 		return Config{}, fmt.Errorf("transaction trace configuration is invalid")
+	}
+	cfg.DevAnalysisBatchSize, err = uintEnv("DEV_ANALYSIS_BATCH_SIZE", 10)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DevAnalysisEvidenceLimit, err = uintEnv("DEV_ANALYSIS_EVIDENCE_LIMIT", 50)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DevAnalysisPollInterval, err = durationEnv(
+		"DEV_ANALYSIS_POLL_INTERVAL",
+		30*time.Second,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DevAnalysisRefreshInterval, err = durationEnv(
+		"DEV_ANALYSIS_REFRESH_INTERVAL",
+		6*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.DevAnalysisBatchSize == 0 ||
+		cfg.DevAnalysisEvidenceLimit == 0 ||
+		cfg.DevAnalysisPollInterval <= 0 ||
+		cfg.DevAnalysisRefreshInterval <= 0 {
+		return Config{}, fmt.Errorf("Dev analysis configuration is invalid")
 	}
 	cfg.RedpandaBrokers = splitEnv("REDPANDA_BROKERS", "localhost:19092")
 	cfg.RawBlockTopic = env("REDPANDA_RAW_BLOCK_TOPIC", "base.block.raw.v1")
