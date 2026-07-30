@@ -42,7 +42,23 @@ func OpenEventStore(
 	return &EventStore{conn: conn}, nil
 }
 
-func (s *EventStore) Insert(ctx context.Context, result logs.Result) error {
+func (s *EventStore) Insert(
+	ctx context.Context,
+	result logs.Result,
+	reorganization *domain.ChainReorganization,
+) error {
+	if result.ChainID == 0 && reorganization != nil && len(reorganization.OrphanedBlocks) > 0 {
+		return fmt.Errorf("cannot correct normalized events without chain id")
+	}
+	if err := applyCanonicalCorrection(
+		ctx,
+		s.conn,
+		result.ChainID,
+		reorganization,
+		eventCanonicalTables,
+	); err != nil {
+		return err
+	}
 	if err := s.insertTransfers(ctx, result); err != nil {
 		return err
 	}

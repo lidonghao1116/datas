@@ -16,7 +16,11 @@ import (
 const maxRawBlockMessageBytes = 16 * 1024 * 1024
 
 type EventStore interface {
-	Insert(ctx context.Context, result logs.Result) error
+	Insert(
+		ctx context.Context,
+		result logs.Result,
+		reorganization *domain.ChainReorganization,
+	) error
 }
 
 type SwapEnricher interface {
@@ -124,7 +128,7 @@ func (p *Processor) handle(ctx context.Context, record *kgo.Record) error {
 			)
 		}
 	}
-	if err := p.store.Insert(ctx, result); err != nil {
+	if err := p.store.Insert(ctx, result, envelope.Reorganization); err != nil {
 		return fmt.Errorf("persist events from block %d: %w", envelope.BlockNumber, err)
 	}
 	p.logger.Info(

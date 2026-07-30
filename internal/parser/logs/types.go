@@ -23,6 +23,7 @@ type RawLog struct {
 }
 
 type Result struct {
+	ChainID   uint64
 	Transfers []domain.ERC20Transfer
 	Swaps     []domain.PoolSwap
 }

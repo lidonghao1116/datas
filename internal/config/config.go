@@ -13,6 +13,7 @@ type Config struct {
 	BaseWSSURL                   string
 	BaseChainID                  uint64
 	StartBlock                   uint64
+	ReorgMaxDepth                uint64
 	RPCRequestTimeout            time.Duration
 	RPCReconnectDelay            time.Duration
 	RegistryEnrichmentTimeout    time.Duration
@@ -114,6 +115,13 @@ func Load() (Config, error) {
 	cfg.StartBlock, err = uintEnv("START_BLOCK", 0)
 	if err != nil {
 		return Config{}, err
+	}
+	cfg.ReorgMaxDepth, err = uintEnv("REORG_MAX_DEPTH", 128)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.ReorgMaxDepth == 0 {
+		return Config{}, fmt.Errorf("REORG_MAX_DEPTH must be positive")
 	}
 	cfg.RPCRequestTimeout, err = durationEnv("RPC_REQUEST_TIMEOUT", 15*time.Second)
 	if err != nil {
